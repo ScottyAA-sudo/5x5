@@ -16,11 +16,11 @@ let nextLetterText;
 
 // Scrabble letter frequencies (no blanks)
 const scrabbleDistribution = {
-  A: 9, B: 2, C: 2, D: 4, E: 12,
-  F: 2, G: 3, H: 2, I: 9, J: 1,
-  K: 1, L: 4, M: 2, N: 6, O: 8,
-  P: 2, Q: 1, R: 6, S: 4, T: 6,
-  U: 4, V: 2, W: 2, X: 1, Y: 2, Z: 1
+  A: 9, B: 5, C: 3, D: 6, E: 12,
+  F: 3, G: 4, H: 3, I: 8, J: 1,
+  K: 2, L: 6, M: 4, N: 8, O: 9,
+  P: 3, Q: 1, R: 8, S: 5, T: 8,
+  U: 5, V: 2, W: 2, X: 1, Y: 2, Z: 1
 };
 let weightedLetters = [];
 
