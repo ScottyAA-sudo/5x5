@@ -40,7 +40,7 @@ function create() {
   for (let row = 0; row < GRID_SIZE; row++) {
     grid[row] = [];
     for (let col = 0; col < GRID_SIZE; col++) {
-      const x = col * CELL_SIZE + CELL_SIZE / 2 + 50;
+      const x = col * CELL_SIZE + CELL_SIZE / 2 + (config.width - GRID_SIZE * CELL_SIZE) / 2;
       const y = row * CELL_SIZE + CELL_SIZE / 2 + 50;
       const rect = this.add.rectangle(x, y, CELL_SIZE, CELL_SIZE, 0xffffff)
         .setStrokeStyle(2, 0x000000)
@@ -89,15 +89,77 @@ function placeLetter(row, col, letterText) {
   const cell = grid[row][col];
   if (cell.filled) return; // can't overwrite
 
+  // Place current letter
   cell.letterText.setText(currentLetter);
   cell.filled = true;
 
-  // TODO: scoring logic will go here later
-  score += 1; // placeholder, just +1 each placement
-  scoreText.setText(`Score: ${score}`);
+  // --- Check scoring ---
+  checkRow(row);
+  checkColumn(col);
 
   // New letter for next move
   currentLetter = getRandomLetter();
   updateNextLetterText();
+}
+
+function checkRow(row) {
+  // Build row string left to right
+  let rowWord = '';
+  for (let col = 0; col < GRID_SIZE; col++) {
+    rowWord += grid[row][col].letterText.text || '';
+  }
+
+  // Trim trailing blanks
+  rowWord = rowWord.trim();
+
+  // Only count from the start of the row
+  if (rowWord.length >= 3) {
+    if (rowWord.length >= 5) {
+      score += 25;
+    } else if (rowWord.length === 4) {
+      score += 15;
+    } else if (rowWord.length === 3) {
+      score += 5;
+    }
+  } else if (rowFilled(row)) {
+    // Row full but no valid word
+    score -= 10;
+  }
+
+  scoreText.setText(`Score: ${score}`);
+}
+
+function checkColumn(col) {
+  // Build column string top to bottom
+  let colWord = '';
+  for (let row = 0; row < GRID_SIZE; row++) {
+    colWord += grid[row][col].letterText.text || '';
+  }
+
+  // Trim trailing blanks
+  colWord = colWord.trim();
+
+  if (colWord.length >= 3) {
+    if (colWord.length >= 5) {
+      score += 25;
+    } else if (colWord.length === 4) {
+      score += 15;
+    } else if (colWord.length === 3) {
+      score += 5;
+    }
+  } else if (colFilled(col)) {
+    // Column full but no valid word
+    score -= 10;
+  }
+
+  scoreText.setText(`Score: ${score}`);
+}
+
+function rowFilled(row) {
+  return grid[row].every(cell => cell.filled);
+}
+
+function colFilled(col) {
+  return grid.every(row => row[col].filled);
 }
 
