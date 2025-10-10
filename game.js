@@ -9,12 +9,31 @@ const supabase = window.supabase.createClient(
 const gameConfig = {
   type: Phaser.AUTO,
   width: 600,
-  height: 760,
-  backgroundColor: '#fafafa'
-};
+  height: 900,
+  backgroundColor: '#fafafa',
+scale: {
+  mode: Phaser.Scale.FIT,
+  autoCenter: Phaser.Scale.CENTER_BOTH,
+  parent: 'phaser-game',
+  expandParent: false
+}
+}
+
 
 const GRID_SIZE = 5;
 const CELL_SIZE = 110;
+
+// Responsive scaling: adjust cell size for small screens
+if (window.innerWidth < 500) {
+  CELL_SIZE = 70;
+  gameConfig.width = 400;
+  gameConfig.height = 700;
+} else if (window.innerWidth < 800) {
+  CELL_SIZE = 90;
+  gameConfig.width = 500;
+  gameConfig.height = 850;
+}
+
 
 let grid = [];
 let score = 0;
@@ -39,6 +58,11 @@ let miniLBTexts = [];   // array of 5 text objects
 // letter deck
 let currentLetter = '';
 let nextLetter = '';
+
+// Swap mechanic
+let swapsUsed = 0;           // how many swaps used (max 3)
+let swapIndicators = [];     // circle "lights" at bottom of board
+
 
 // ===================== Letter Distribution =====================
 const scrabbleDistribution = {
@@ -69,110 +93,69 @@ class SummaryScene extends Phaser.Scene {
   constructor() { super('SummaryScene'); }
 
   async create(data) {
-    const { words, total } = data;
+    const { words = [], total = 0 } = data;
 
-    this.add.text(300, 40, 'Game Summary', {
-      fontSize: '28px',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
+    // Sort words descending by score
+    const sortedWords = [...words].sort((a, b) => b.score - a.score);
 
-    // List valid words + scores
-    let y = 100;
-    words.forEach(w => {
-      this.add.text(100, y, `${w.word}`, { fontSize: '20px' });
-      this.add.text(500, y, `${w.score}`, { fontSize: '20px' }).setOrigin(1, 0);
-      y += 30;
+    // Dim background
+    this.add.rectangle(300, 380, 600, 760, 0x000000, 0.5).setDepth(0);
+
+    // Card
+    const card = this.add.rectangle(300, 380, 460, 500, 0xffffff, 1)
+      .setStrokeStyle(3, 0x222222)
+      .setOrigin(0.5)
+      .setDepth(0);
+    this.tweens.add({ targets: card, alpha: 1, duration: 250 });
+
+    // Title + total
+    this.add.text(300, 160, 'Game Over', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '32px',
+      color: '#111'
+    }).setOrigin(0.5).setDepth(1);
+
+    this.add.text(300, 210, `Total Score: ${total}`, {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '22px',
+      color: '#333'
+    }).setOrigin(0.5).setDepth(1);
+
+    // Headers
+    this.add.text(160, 250, 'Word', { fontSize: '18px', color: '#555' }).setDepth(1);
+    this.add.text(440, 250, 'Pts', { fontSize: '18px', color: '#555' }).setOrigin(1,0).setDepth(1);
+
+    // Word list (max 10 shown)
+    let y = 275;
+    sortedWords.slice(0,10).forEach(w => {
+      this.add.text(160, y, w.word, { fontSize: '18px', color: '#111' }).setDepth(1);
+      this.add.text(440, y, w.score.toString(), { fontSize: '18px', color: '#111' })
+          .setOrigin(1,0).setDepth(1);
+      y += 26;
     });
 
-    // Total score
-    this.add.text(100, y + 20, 'Total Score:', {
-      fontSize: '22px', fontStyle: 'bold'
-    });
-    this.add.text(500, y + 20, `${total}`, {
-      fontSize: '22px', fontStyle: 'bold'
-    }).setOrigin(1, 0);
+    // Buttons
+    const makeBtn = (label, x, y, onClick) => {
+      const btn = this.add.rectangle(x, y, 160, 44, 0x333333, 1)
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(1);
+      const text = this.add.text(x, y, label, {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: '18px',
+        color: '#fff'
+      }).setOrigin(0.5).setDepth(1);
+      btn.on('pointerover', () => btn.setFillStyle(0x555555));
+      btn.on('pointerout',  () => btn.setFillStyle(0x333333));
+      btn.on('pointerdown', onClick);
+    };
 
-    y += 80;
-
-    // --- Check if score qualifies for Top 5 ---
-    const { data: scores } = await supabase
-      .from('scores')
-      .select('*')
-      .order('score', { ascending: false })
-      .limit(5);
-
-    const lowestTop5 = (scores && scores.length === 5) ? scores[4].score : 0;
-
-    if (total > lowestTop5 || (scores && scores.length < 5)) {
-      // Show prompt for player name
-      this.add.text(300, y, 'You made the Top 5! Enter your name:', {
-        fontSize: '20px'
-      }).setOrigin(0.5);
-
-      // Create HTML input element over canvas
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.placeholder = 'Your Name';
-      input.style.position = 'absolute';
-      input.style.top = `${this.sys.canvas.offsetTop + y + 20}px`;
-      input.style.left = `${this.sys.canvas.offsetLeft + 150}px`;
-      input.style.fontSize = '18px';
-      input.maxLength = 12;
-      document.body.appendChild(input);
-
-      // Submit button
-      const submitBtn = this.add.text(300, y + 60, 'Submit Score', {
-        fontSize: '20px',
-        backgroundColor: '#ddd',
-        padding: { x: 10, y: 5 }
-      }).setOrigin(0.5).setInteractive();
-
-      submitBtn.on('pointerdown', async () => {
-        const playerName = input.value.trim() || 'Anonymous';
-
-        // Save to Supabase
-        await supabase.from('scores').insert([
-          { name: playerName, score: total }
-        ]);
-
-        // Remove input element
-        document.body.removeChild(input);
-
-        // Jump to leaderboard
-        this.scene.start('LeaderboardScene');
-      });
-    }
-
-// Centered buttons with darker style
-const centerX = this.scale.width / 2;
-const btnY = y + 120;
-
-const makeBtn = (label, x, onClick) => {
-  const btn = this.add.text(x, btnY, label, {
-    fontSize: '20px',
-    fontFamily: 'Arial Black, Verdana, sans-serif',
-    backgroundColor: '#888',           // darker default
-    color: '#fff',
-    padding: { x: 14, y: 8 }
-  }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-  btn.on('pointerover', () => btn.setStyle({ backgroundColor: '#666' })); // hover darker
-  btn.on('pointerout',  () => btn.setStyle({ backgroundColor: '#888' }));
-  btn.on('pointerdown', onClick);
-  return btn;
-};
-
-makeBtn('Return to Game', centerX - 120, () => {
-  resetGameState();
-  this.scene.start('MainScene');
-});
-
-makeBtn('See Leaderboard', centerX + 120, () => {
-  this.scene.start('LeaderboardScene');
-});
+makeBtn('Leaderboard', 200, 540, () => this.scene.start('LeaderboardScene'));
+makeBtn('New Game', 400, 540, () => { resetGameState(); this.scene.start('MainScene'); });
 
   }
 }
+
 
 
 // Leaderboard scene
@@ -180,32 +163,155 @@ class LeaderboardScene extends Phaser.Scene {
   constructor() { super('LeaderboardScene'); }
 
   async create() {
-    this.add.text(300, 40, 'Leaderboard', { fontSize: '28px', fontStyle: 'bold' }).setOrigin(0.5);
+    // Overlay & card
+    this.add.rectangle(300, 380, 600, 760, 0x000000, 0.5).setDepth(0);
+    const card = this.add.rectangle(300, 380, 460, 460, 0xffffff, 1)
+      .setStrokeStyle(3, 0x222222)
+      .setOrigin(0.5)
+      .setDepth(0);
+    this.tweens.add({ targets: card, alpha: 1, duration: 250 });
 
-    const { data: scores } = await supabase
+    // Title
+    this.add.text(300, 180, 'Top 5 Scores', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '28px',
+      color: '#111'
+    }).setOrigin(0.5).setDepth(1);
+
+    // Fetch scores
+    const { data: scores = [] } = await supabase
       .from('scores')
       .select('*')
       .order('score', { ascending: false })
       .limit(5);
 
-    let y = 100;
-    (scores || []).forEach((s, i) => {
-      this.add.text(100, y, `${i+1}. ${s.name}`, { fontSize: '20px' });
-      this.add.text(400, y, `${s.score}`, { fontSize: '20px' }).setOrigin(1,0);
-      this.add.text(500, y, `${new Date(s.created_at).toLocaleDateString()}`, { fontSize: '16px' }).setOrigin(1,0);
-      y += 30;
+    // List
+    let y = 240;
+    scores.forEach((s, i) => {
+      this.add.text(120, y, `${i+1}. ${s.name}`, { fontSize: '20px', color: '#111' }).setDepth(1);
+      this.add.text(330, y, `${s.score}`, { fontSize: '20px', color: '#111' })
+          .setOrigin(1,0).setDepth(1);
+      const date = new Date(s.created_at).toLocaleDateString('en-US',{month:'2-digit',day:'2-digit'});
+      this.add.text(400, y, date, { fontSize: '20px', color: '#666' }).setOrigin(0,0).setDepth(1);
+      y += 32;
     });
 
-    const backBtn = this.add.text(300, y+80, 'Return to Game', {
-      fontSize: '20px', backgroundColor:'#ddd', padding:{x:10,y:5}
-    }).setOrigin(0.5).setInteractive();
+    // New Game button
+    const btn = this.add.rectangle(300, 520, 160, 44, 0x333333, 1)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(1);
+    const text = this.add.text(300, 520, 'New Game', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '18px',
+      color: '#fff'
+    }).setOrigin(0.5).setDepth(1);
+    btn.on('pointerover', () => btn.setFillStyle(0x555555));
+    btn.on('pointerout',  () => btn.setFillStyle(0x333333));
+    btn.on('pointerdown', () => { resetGameState(); this.scene.start('MainScene'); });
+  }
+}
 
-    backBtn.on('pointerdown', () => {
-      resetGameState();
-      this.scene.start('MainScene');
+
+// ===================== Name Entry Scene =====================
+class NameEntryScene extends Phaser.Scene {
+  constructor() { super('NameEntryScene'); }
+
+  create(data) {
+    const { total, words } = data;
+    const centerX = this.scale.width / 2;
+    const centerY = this.scale.height / 2;
+
+    // Dim background
+    this.add.rectangle(centerX, centerY, this.scale.width, this.scale.height, 0x000000, 0.5);
+
+    // Card
+    const card = this.add.rectangle(centerX, centerY, 420, 240, 0xffffff)
+      .setStrokeStyle(3, 0x222222)
+      .setOrigin(0.5);
+
+    this.add.text(centerX, centerY - 70, 'New High Score!', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '26px',
+      color: '#111'
+    }).setOrigin(0.5);
+
+    this.add.text(centerX, centerY - 30, `Your Score: ${total}`, {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '20px',
+      color: '#333'
+    }).setOrigin(0.5);
+
+    // Create HTML input for name
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Enter your name';
+    input.style.position = 'absolute';
+    input.style.width = '220px';
+    input.style.padding = '6px';
+    input.style.fontSize = '16px';
+    input.style.border = '2px solid #333';
+    input.style.borderRadius = '6px';
+    input.style.textAlign = 'center';
+    input.style.background = '#fff';
+    input.style.zIndex = '10';
+
+    // Position input centered above the Submit button
+    const canvasBounds = this.sys.canvas.getBoundingClientRect();
+    const inputX = canvasBounds.left + canvasBounds.width / 2 - 110; // half of 220px
+    const inputY = canvasBounds.top + canvasBounds.height / 2 + 10;  // 10px above button
+    input.style.left = `${inputX}px`;
+    input.style.top = `${inputY}px`;
+
+    document.body.appendChild(input);
+
+    // Submit button
+    const btnY = centerY + 60;
+    const btn = this.add.rectangle(centerX, btnY, 140, 40, 0x333333)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    const text = this.add.text(centerX, btnY, 'Submit', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '18px',
+      color: '#fff'
+    }).setOrigin(0.5);
+
+    btn.on('pointerover', () => btn.setFillStyle(0x555555));
+    btn.on('pointerout',  () => btn.setFillStyle(0x333333));
+
+    btn.on('pointerdown', async () => {
+      const playerName = input.value.trim() || 'Anonymous';
+      document.body.removeChild(input);
+
+      // Save to Supabase
+      const { data, error } = await supabase
+        .from('scores')
+        .insert([{ name: playerName, score: total }])
+        .select();
+
+      if (error) {
+        console.error('Supabase insert error:', error);
+        alert('⚠️ Unable to save score — check console for details.');
+      } else {
+        console.log('✅ Score inserted:', data);
+      }
+
+      // Go to summary card next
+      this.scene.start('SummaryScene', { words, total });
+    });
+
+    // Recenter input when window resizes
+    window.addEventListener('resize', () => {
+      const rect = this.sys.canvas.getBoundingClientRect();
+      input.style.left = `${rect.left + rect.width / 2 - 110}px`;
+      input.style.top  = `${rect.top + rect.height / 2 + 10}px`;
     });
   }
 }
+
+
+
 
 // ===================== Phaser lifecycle fns used by MainScene =====================
 function preload() {}
@@ -300,6 +406,27 @@ function create() {
     }).setOrigin(0.5, 0);
   }
 
+  // ===================== Swap Lights (3 total) =====================
+  const lightsY = 100 + GRID_SIZE * CELL_SIZE + 60; // just below the grid
+  const startX = gameConfig.width / 2 - 60;
+
+  for (let i = 0; i < 3; i++) {
+    const light = this.add.circle(startX + i * 60, lightsY, 12, 0xcccccc);
+    light.setStrokeStyle(2, 0x555555);
+    swapIndicators.push(light);
+  }
+
+updateSwapIndicators();
+
+
+  // Label
+  this.add.text(gameConfig.width / 2, lightsY + 20, 'Swaps Used', {
+    fontFamily: 'Verdana, sans-serif',
+    fontSize: '12px',
+    color: '#555'
+  }).setOrigin(0.5, 0);
+
+
     // Mini leaderboard under the grid
   initMiniLeaderboardUI(this);
   updateMiniLeaderboard(this);
@@ -312,15 +439,79 @@ function create() {
 function update() {}
 
 // ===================== Helpers =====================
+
+
+// --- Helper: defines friendly next-letter tendencies ---
+const bigramMap = {
+  A: "NTRSL", B: "REALO", C: "HAREO", D: "EARNO", E: "RSTNL",
+  F: "REALO", G: "RANEO", H: "EAOIN", I: "NESTR",
+  J: "UOEA", K: "NEA", L: "EAST", M: "EAIO", N: "DTEA",
+  O: "RNSTL", P: "REALS", Q: "U", R: "ESTOA", S: "TEAOR", T: "HEAOR",
+  U: "RSTNL", V: "AEIO", W: "AROE", X: "PEA", Y: "AEIO", Z: "EA"
+};
+
+const vowels = ["A", "E", "I", "O", "U"];
+const consonants = "BCDFGHJKLMNPQRSTVWXYZ".split("");
+
+// --- Helper: pick random item from string or array ---
+function weightedPick(list) {
+  if (typeof list === "string") list = list.split("");
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+// --- Helper: get vowel/consonant ratio ---
+function getVowelRatio() {
+  let filledLetters = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const ch = grid[r][c]?.letterText?.text || "";
+      if (ch) filledLetters.push(ch);
+    }
+  }
+  if (filledLetters.length === 0) return 0.4; // default
+  const vowelCount = filledLetters.filter(l => vowels.includes(l)).length;
+  return vowelCount / filledLetters.length;
+}
+
+// --- Smart Letter Picker ---
 function pickNextLetter() {
+  const useBigram = Math.random() < 0.7;  // 70% chance use smart weighting
+
+  // Initialization
   if (!currentLetter) {
-    currentLetter = weightedLetters[Math.floor(Math.random() * weightedLetters.length)];
-    nextLetter = weightedLetters[Math.floor(Math.random() * weightedLetters.length)];
+    currentLetter = weightedPick(weightedLetters);
+    nextLetter = weightedPick(weightedLetters);
+    return;
+  }
+
+  // Shift current to next
+  currentLetter = nextLetter;
+
+  // --- Phase 1: Vowel balancing ---
+  const vowelRatio = getVowelRatio();
+  if (vowelRatio < 0.35) {
+    // Too few vowels, force a vowel ~40% of the time
+    if (Math.random() < 0.4) {
+      nextLetter = weightedPick(vowels);
+      return;
+    }
+  } else if (vowelRatio > 0.55) {
+    // Too many vowels, bias toward consonants
+    if (Math.random() < 0.4) {
+      nextLetter = weightedPick(consonants);
+      return;
+    }
+  }
+
+  // --- Phase 2: Bigram weighting ---
+  const options = bigramMap[currentLetter];
+  if (useBigram && options) {
+    nextLetter = weightedPick(options);
   } else {
-    currentLetter = nextLetter;
-    nextLetter = weightedLetters[Math.floor(Math.random() * weightedLetters.length)];
+    nextLetter = weightedPick(weightedLetters);
   }
 }
+
 
 function updateNextLetterUI(scene, animate = false) {
   scene.onDeckText.setText(`On Deck: ${nextLetter}`);
@@ -357,7 +548,7 @@ function initMiniLeaderboardUI(scene) {
 
   // Compute bottom-of-grid
   const GRID_BOTTOM = 100 + GRID_SIZE * CELL_SIZE; // GRID_TOP is 100 in your code
-  const startY = GRID_BOTTOM + 34;                 // below col labels
+  const startY = GRID_BOTTOM + 120;                 // below col labels
 
   // Header
   miniLBHeader = scene.add.text(gameConfig.width / 2, startY, 'Top 5 All-Time', {
@@ -381,6 +572,18 @@ function initMiniLeaderboardUI(scene) {
   // Fetch & populate
   updateMiniLeaderboard(scene);
 }
+
+  function updateSwapIndicators() {
+    for (let i = 0; i < 3; i++) {
+      if (!swapIndicators[i]) continue;
+      if (i < swapsUsed) {
+        swapIndicators[i].setFillStyle(0x00cc66);  // green for used
+      } else {
+        swapIndicators[i].setFillStyle(0xcccccc);  // grey for unused
+      }
+    }
+  }
+
 
 async function updateMiniLeaderboard(scene) {
   const { data: scores, error } = await supabase
@@ -556,7 +759,31 @@ async function recomputeColumn(col) {
 // ===================== Placement =====================
 async function placeLetter(row, col) {
   const cell = grid[row][col];
-  if (cell.filled) return;
+
+  // If cell is filled...
+  if (cell.filled) {
+    // ...allow overwrite only if swaps remain
+    if (swapsUsed < 3) {
+      swapsUsed++;
+      cell.letterText.setText(currentLetter);
+      updateSwapIndicators();
+    } else {
+      // No swaps left
+      const sceneRef = grid[0][0].rect.scene;
+      const warn = sceneRef.add.text(gameConfig.width / 2, 60, 'No swaps remaining!', {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: '18px',
+        color: '#cc0000'
+      }).setOrigin(0.5);
+      sceneRef.tweens.add({ targets: warn, alpha: 0, duration: 1200, onComplete: () => warn.destroy() });
+      return;
+    }
+  } else {
+    // normal placement if empty
+    cell.filled = true;
+    cell.letterText.setText(currentLetter);
+  }
+
 
   cell.letterText.setText(currentLetter);
   cell.filled = true;
@@ -568,15 +795,36 @@ async function placeLetter(row, col) {
   const sceneRef = grid[0][0].rect.scene;
   updateNextLetterUI(sceneRef, true);
 
-  if (isBoardFull()) {
-    grayUnusedCells();
+if (isBoardFull()) {
+  grayUnusedCells();
 
-    // Collect words for summary
-    let words = [];
-    for (let r = 0; r < GRID_SIZE; r++) {
-      const w = buildLeadingRowWord(r);
-      if (rowBestLen[r] >= 3) words.push({ word: w.slice(0,rowBestLen[r]), score: rowScores[r] });
-    }
+  // Collect words for summary
+  let words = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    const w = buildLeadingRowWord(r);
+    if (rowBestLen[r] >= 3) words.push({ word: w.slice(0,rowBestLen[r]), score: rowScores[r] });
+  }
+  for (let c = 0; c < GRID_SIZE; c++) {
+    const w = buildLeadingColWord(c);
+    if (colBestLen[c] >= 3) words.push({ word: w.slice(0,colBestLen[c]), score: colScores[c] });
+  }
+
+  // --- Check leaderboard threshold ---
+  const { data: scores } = await supabase
+    .from('scores')
+    .select('*')
+    .order('score', { ascending: false })
+    .limit(5);
+
+  const lowestTop5 = (scores && scores.length === 5) ? scores[4].score : 0;
+
+  if (score > lowestTop5 || (scores && scores.length < 5)) {
+    sceneRef.scene.start('NameEntryScene', { words, total: score });
+  } else {
+    sceneRef.scene.start('SummaryScene', { words, total: score });
+  }
+}
+
     for (let c = 0; c < GRID_SIZE; c++) {
       const w = buildLeadingColWord(c);
       if (colBestLen[c] >= 3) words.push({ word: w.slice(0,colBestLen[c]), score: colScores[c] });
@@ -584,10 +832,12 @@ async function placeLetter(row, col) {
 
     sceneRef.scene.start('SummaryScene', { words, total: score });
   }
-}
+
 
 // ===================== Reset =====================
 function resetGameState() {
+  swapsUsed = 0;
+  swapIndicators = [];
   score = 0;
   rowScores.fill(0);
   colScores.fill(0);
@@ -604,5 +854,5 @@ function resetGameState() {
 // ===================== Boot Game (attach scenes here) =====================
 new Phaser.Game({
   ...gameConfig,
-  scene: [MainScene, SummaryScene, LeaderboardScene]
+  scene: [MainScene, NameEntryScene, SummaryScene, LeaderboardScene]
 });

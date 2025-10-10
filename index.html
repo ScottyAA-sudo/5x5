@@ -2,24 +2,81 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Word Grid Game</title>
+
+  <!-- Phaser and Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Game logic -->
   <script src="game.js" defer></script>
+
   <style>
-    body {
+    html, body {
       margin: 0;
       padding: 0;
-      background: #f4f4f4;
+      width: 100%;
+      height: 100%;
+      background: #fafafa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
       font-family: Arial, sans-serif;
     }
+
+    /* Phaser game container */
+    #phaser-game {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      max-width: 100vw;
+      max-height: 100vh;
+    }
+
+    /* Ensure the Phaser canvas scales properly */
     canvas {
       display: block;
-      margin: auto;
+      margin: 0 auto;
+      max-width: 100%;
+      height: auto !important;
+      border: none;
+    }
+
+    /* Style the input overlay (for name entry) */
+    input[type="text"] {
+      z-index: 10;
+      position: absolute;
+      border: 2px solid #333;
+      border-radius: 6px;
+      padding: 6px;
+      font-size: 16px;
+      text-align: center;
+      background: #fff;
+      outline: none;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      transition: box-shadow 0.2s ease;
+    }
+
+    input[type="text"]:focus {
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+    }
+
+    @media (max-width: 600px) {
+      input[type="text"] {
+        font-size: 14px;
+        width: 180px;
+      }
     }
   </style>
 </head>
+
 <body>
+  <div id="phaser-game"></div>
 </body>
 </html>
+
 
