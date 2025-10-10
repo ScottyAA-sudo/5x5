@@ -98,53 +98,66 @@ class SummaryScene extends Phaser.Scene {
 
   async create(data) {
     const { words = [], total = 0 } = data;
+    const { width, height } = this.sys.game.scale.gameSize;
+    const centerX = width / 2;
+    const centerY = height / 2;
 
-    // Sort words descending by score
-    const sortedWords = [...words].sort((a, b) => b.score - a.score);
+    // Responsive card sizing
+    const cardWidth = Math.min(460, width * 0.8);
+    const cardHeight = Math.min(500, height * 0.7);
 
     // Dim background
-    this.add.rectangle(300, 380, 600, 760, 0x000000, 0.5).setDepth(0);
+    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.5).setDepth(0);
 
-    // Card
-    const card = this.add.rectangle(300, 380, 460, 500, 0xffffff, 1)
+    // Card container
+    const card = this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0xffffff)
       .setStrokeStyle(3, 0x222222)
       .setOrigin(0.5)
       .setDepth(0);
+
     this.tweens.add({ targets: card, alpha: 1, duration: 250 });
 
-    // Title + total
-    this.add.text(300, 160, 'Game Over', {
+    // Title
+    this.add.text(centerX, centerY - cardHeight / 2 + 50, 'Game Over', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '32px',
       color: '#111'
     }).setOrigin(0.5).setDepth(1);
 
-    this.add.text(300, 210, `Total Score: ${total}`, {
+    // Total Score
+    this.add.text(centerX, centerY - cardHeight / 2 + 100, `Total Score: ${total}`, {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '22px',
       color: '#333'
     }).setOrigin(0.5).setDepth(1);
 
-    // Headers
-    this.add.text(160, 250, 'Word', { fontSize: '18px', color: '#555' }).setDepth(1);
-    this.add.text(440, 250, 'Pts', { fontSize: '18px', color: '#555' }).setOrigin(1,0).setDepth(1);
+    // Sort words descending by score
+    const sortedWords = [...words].sort((a, b) => b.score - a.score);
+
+    // Column headers
+    const headerY = centerY - cardHeight / 2 + 140;
+    this.add.text(centerX - cardWidth / 2 + 40, headerY, 'Word', { fontSize: '18px', color: '#555' }).setDepth(1);
+    this.add.text(centerX + cardWidth / 2 - 40, headerY, 'Pts', { fontSize: '18px', color: '#555' })
+      .setOrigin(1, 0).setDepth(1);
 
     // Word list (max 10 shown)
-    let y = 275;
-    sortedWords.slice(0,10).forEach(w => {
-      this.add.text(160, y, w.word, { fontSize: '18px', color: '#111' }).setDepth(1);
-      this.add.text(440, y, w.score.toString(), { fontSize: '18px', color: '#111' })
-          .setOrigin(1,0).setDepth(1);
+    let y = headerY + 25;
+    sortedWords.slice(0, 10).forEach(w => {
+      this.add.text(centerX - cardWidth / 2 + 40, y, w.word, { fontSize: '18px', color: '#111' }).setDepth(1);
+      this.add.text(centerX + cardWidth / 2 - 40, y, w.score.toString(), { fontSize: '18px', color: '#111' })
+        .setOrigin(1, 0).setDepth(1);
       y += 26;
     });
 
     // Buttons
-    const makeBtn = (label, x, y, onClick) => {
-      const btn = this.add.rectangle(x, y, 160, 44, 0x333333, 1)
+    const buttonY = centerY + cardHeight / 2 - 50;
+
+    const makeBtn = (label, offsetX, onClick) => {
+      const btn = this.add.rectangle(centerX + offsetX, buttonY, 160, 44, 0x333333)
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
         .setDepth(1);
-      const text = this.add.text(x, y, label, {
+      const text = this.add.text(centerX + offsetX, buttonY, label, {
         fontFamily: 'Arial Black, Verdana, sans-serif',
         fontSize: '18px',
         color: '#fff'
@@ -154,29 +167,39 @@ class SummaryScene extends Phaser.Scene {
       btn.on('pointerdown', onClick);
     };
 
-makeBtn('Leaderboard', 200, 540, () => this.scene.start('LeaderboardScene'));
-makeBtn('New Game', 400, 540, () => { resetGameState(); this.scene.start('MainScene'); });
-
+    makeBtn('Leaderboard', -100, () => this.scene.start('LeaderboardScene'));
+    makeBtn('New Game', 100, () => { resetGameState(); this.scene.start('MainScene'); });
   }
 }
 
 
 
-// Leaderboard scene
+
+// ===================== Leaderboard Scene =====================
 class LeaderboardScene extends Phaser.Scene {
   constructor() { super('LeaderboardScene'); }
 
   async create() {
-    // Overlay & card
-    this.add.rectangle(300, 380, 600, 760, 0x000000, 0.5).setDepth(0);
-    const card = this.add.rectangle(300, 380, 460, 460, 0xffffff, 1)
+    const { width, height } = this.sys.game.scale.gameSize;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    // Responsive card size
+    const cardWidth = Math.min(460, width * 0.8);
+    const cardHeight = Math.min(460, height * 0.65);
+
+    // Background overlay
+    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.5).setDepth(0);
+
+    // Card container
+    const card = this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0xffffff)
       .setStrokeStyle(3, 0x222222)
       .setOrigin(0.5)
       .setDepth(0);
     this.tweens.add({ targets: card, alpha: 1, duration: 250 });
 
     // Title
-    this.add.text(300, 180, 'Top 5 Scores', {
+    this.add.text(centerX, centerY - cardHeight / 2 + 50, 'Top 5 Scores', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '28px',
       color: '#111'
@@ -189,29 +212,39 @@ class LeaderboardScene extends Phaser.Scene {
       .order('score', { ascending: false })
       .limit(5);
 
-    // List
-    let y = 240;
+    // List of scores
+    const listStartY = centerY - cardHeight / 2 + 100;
+    let y = listStartY;
+
     scores.forEach((s, i) => {
-      this.add.text(120, y, `${i+1}. ${s.name}`, { fontSize: '20px', color: '#111' }).setDepth(1);
-      this.add.text(330, y, `${s.score}`, { fontSize: '20px', color: '#111' })
-          .setOrigin(1,0).setDepth(1);
-      const date = new Date(s.created_at).toLocaleDateString('en-US',{month:'2-digit',day:'2-digit'});
-      this.add.text(400, y, date, { fontSize: '20px', color: '#666' }).setOrigin(0,0).setDepth(1);
+      const nameX = centerX - cardWidth / 2 + 40;
+      const scoreX = centerX + cardWidth / 2 - 100;
+      const dateX = centerX + cardWidth / 2 - 40;
+
+      this.add.text(nameX, y, `${i + 1}. ${s.name}`, { fontSize: '20px', color: '#111' }).setDepth(1);
+      this.add.text(scoreX, y, `${s.score}`, { fontSize: '20px', color: '#111' })
+        .setOrigin(1, 0).setDepth(1);
+
+      const date = new Date(s.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' });
+      this.add.text(dateX, y, date, { fontSize: '18px', color: '#666' })
+        .setOrigin(1, 0).setDepth(1);
+
       y += 32;
     });
 
-    // New Game button
-    const btn = this.add.rectangle(300, 520, 160, 44, 0x333333, 1)
+    // Button (centered)
+    const buttonY = centerY + cardHeight / 2 - 50;
+    const btn = this.add.rectangle(centerX, buttonY, 160, 44, 0x333333, 1)
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
       .setDepth(1);
-    const text = this.add.text(300, 520, 'New Game', {
+    const text = this.add.text(centerX, buttonY, 'New Game', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '18px',
       color: '#fff'
     }).setOrigin(0.5).setDepth(1);
     btn.on('pointerover', () => btn.setFillStyle(0x555555));
-    btn.on('pointerout',  () => btn.setFillStyle(0x333333));
+    btn.on('pointerout', () => btn.setFillStyle(0x333333));
     btn.on('pointerdown', () => { resetGameState(); this.scene.start('MainScene'); });
   }
 }
@@ -221,20 +254,23 @@ class LeaderboardScene extends Phaser.Scene {
 class NameEntryScene extends Phaser.Scene {
   constructor() { super('NameEntryScene'); }
 
-  create(data) {
-    const { total, words } = data;
+ create(data) {
+  const { total, words } = data;
+  const { width, height } = this.sys.game.scale.gameSize;
+  const centerX = width / 2;
+  const centerY = height / 2;
 
-    // Match SummaryScene and LeaderboardScene card placement
-    const centerX = 300;
-    const centerY = 380;
+  const cardWidth = Math.min(460, width * 0.8);
+  const cardHeight = Math.min(260, height * 0.45);
 
-    // Dim background
-    this.add.rectangle(centerX, centerY, 600, 760, 0x000000, 0.5);
+  // Dim background
+  this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.5);
 
-    // Card (same size as others)
-    const card = this.add.rectangle(centerX, centerY, 460, 260, 0xffffff)
-      .setStrokeStyle(3, 0x222222)
-      .setOrigin(0.5);
+  // Card
+  const card = this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0xffffff)
+    .setStrokeStyle(3, 0x222222)
+    .setOrigin(0.5);
+
 
     // Title
     this.add.text(centerX, centerY - 70, 'New High Score!', {
@@ -266,7 +302,7 @@ class NameEntryScene extends Phaser.Scene {
 
     // Position input centered above Submit button
     const canvasBounds = this.sys.canvas.getBoundingClientRect();
-    const inputX = canvasBounds.left + 190; // (600 canvas width - 220 input width)/2 = 190
+    const inputX = canvasBounds.left + centerX - 110; // centerX minus half input width
     const inputY = canvasBounds.top + (centerY - 10); // same vertical alignment as others
     input.style.left = `${inputX}px`;
     input.style.top = `${inputY}px`;
