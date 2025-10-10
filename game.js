@@ -24,11 +24,10 @@ const gameConfig = {
 };
 
 
-
 const GRID_SIZE = 5;
-const CELL_SIZE = 110;
+let CELL_SIZE = 110; // 🔹 use let, not const
 
-// Responsive scaling: adjust cell size for small screens
+// Responsive scaling
 if (window.innerWidth < 500) {
   CELL_SIZE = 70;
   gameConfig.width = 400;
@@ -38,7 +37,6 @@ if (window.innerWidth < 500) {
   gameConfig.width = 500;
   gameConfig.height = 850;
 }
-
 
 
 let grid = [];
@@ -330,6 +328,7 @@ function create() {
 
   // --- Grid placement ---
   const GRID_LEFT = (canvasWidth - GRID_SIZE * CELL_SIZE) / 2;
+  const GRID_RIGHT = GRID_LEFT + GRID_SIZE * CELL_SIZE;
   const GRID_TOP = Math.max(60, (canvasHeight - (GRID_SIZE * CELL_SIZE + 300)) / 2); 
   // adds some top margin; scales on mobile
 
@@ -359,34 +358,35 @@ function create() {
     }
   }
 
-  // --- Top UI row ---
-  const uiY = 10;
-  const centerX = canvasWidth / 2;
+    // --- Top UI row ---
+    const uiY = 10;
+    const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
 
-  this.onDeckText = this.add.text(20, uiY, 'On Deck: ', {
-    fontFamily: 'Arial Black, Verdana, sans-serif',
-    fontSize: '20px',
-    fontStyle: 'bold',
-    color: '#333'
-  }).setOrigin(0, 0);
+    this.onDeckText = this.add.text(GRID_LEFT, uiY, 'On Deck: ', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '20px',
+      fontStyle: 'bold',
+      color: '#333'
+    }).setOrigin(0, 0);
 
-  this.nextLetterBox = this.add.rectangle(centerX, uiY, 80, 80, 0xffffff, 1)
-    .setStrokeStyle(3, 0x000000)
-    .setOrigin(0.5, 0);
+    this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0xffffff, 1)
+      .setStrokeStyle(3, 0x000000)
+      .setOrigin(0.5, 0);
 
-  this.nextLetterText = this.add.text(centerX, uiY + 40, '', {
-    fontFamily: 'Arial Black, Verdana, sans-serif',
-    fontSize: '48px',
-    fontStyle: 'bold',
-    color: '#007bff'
-  }).setOrigin(0.5);
+    this.nextLetterText = this.add.text(gridCenterX, uiY + 40, '', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '48px',
+      fontStyle: 'bold',
+      color: '#007bff'
+    }).setOrigin(0.5);
 
-  scoreText = this.add.text(canvasWidth - 20, uiY + 12, 'Score: 0', {
-    fontFamily: 'Arial Black, Verdana, sans-serif',
-    fontSize: '20px',
-    fontStyle: 'bold',
-    color: '#000'
-  }).setOrigin(1, 0.5);
+    scoreText = this.add.text(GRID_RIGHT, uiY + 12, 'Score: 0', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '20px',
+      fontStyle: 'bold',
+      color: '#000'
+    }).setOrigin(1, 0.5);
+
 
   // --- Row & column labels ---
   for (let r = 0; r < GRID_SIZE; r++) {
@@ -544,27 +544,25 @@ function isBoardFull() {
 }
 
 function initMiniLeaderboardUI(scene) {
-  // Clear old (in case of hot reload)
   if (miniLBHeader) miniLBHeader.destroy();
   miniLBTexts.forEach(t => t.destroy());
   miniLBTexts = [];
 
-  // Compute bottom-of-grid
-  const GRID_BOTTOM = 100 + GRID_SIZE * CELL_SIZE; // GRID_TOP is 100 in your code
-  const startY = GRID_BOTTOM + 120;                 // below col labels
+  const canvasWidth = scene.sys.game.scale.gameSize.width;
+  const GRID_TOP = 100;
+  const GRID_BOTTOM = GRID_TOP + GRID_SIZE * CELL_SIZE;
+  const startY = GRID_BOTTOM + 240;
 
-  // Header
-  miniLBHeader = scene.add.text(gameConfig.width / 2, startY, 'Top 5 All-Time', {
+  miniLBHeader = scene.add.text(canvasWidth / 2, startY, 'Top 5 All-Time', {
     fontFamily: 'Arial Black, Verdana, sans-serif',
     fontSize: '14px',
     fontStyle: 'bold',
     color: '#444'
   }).setOrigin(0.5, 0);
 
-  // Placeholder rows
   const lineY = startY + 20;
   for (let i = 0; i < 5; i++) {
-    const t = scene.add.text(300, lineY + i * 16, '', {
+    const t = scene.add.text(canvasWidth / 2, lineY + i * 16, '', {
       fontFamily: 'Verdana, sans-serif',
       fontSize: '12px',
       color: '#555'
@@ -572,9 +570,9 @@ function initMiniLeaderboardUI(scene) {
     miniLBTexts.push(t);
   }
 
-  // Fetch & populate
   updateMiniLeaderboard(scene);
 }
+
 
   function updateSwapIndicators() {
     for (let i = 0; i < 3; i++) {
