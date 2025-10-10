@@ -12,11 +12,14 @@ const gameConfig = {
   height: 900,
   backgroundColor: '#fafafa',
 scale: {
-  mode: Phaser.Scale.FIT,
+  mode: Phaser.Scale.ENVELOP,   // fills screen as much as possible
   autoCenter: Phaser.Scale.CENTER_BOTH,
   parent: 'phaser-game',
-  expandParent: false
+  width: window.innerWidth,
+  height: window.innerHeight,
+  expandParent: true
 }
+
 }
 
 
@@ -33,6 +36,7 @@ if (window.innerWidth < 500) {
   gameConfig.width = 500;
   gameConfig.height = 850;
 }
+
 
 
 let grid = [];
@@ -219,30 +223,34 @@ class NameEntryScene extends Phaser.Scene {
 
   create(data) {
     const { total, words } = data;
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
+
+    // Match SummaryScene and LeaderboardScene card placement
+    const centerX = 300;
+    const centerY = 380;
 
     // Dim background
-    this.add.rectangle(centerX, centerY, this.scale.width, this.scale.height, 0x000000, 0.5);
+    this.add.rectangle(centerX, centerY, 600, 760, 0x000000, 0.5);
 
-    // Card
-    const card = this.add.rectangle(centerX, centerY, 420, 240, 0xffffff)
+    // Card (same size as others)
+    const card = this.add.rectangle(centerX, centerY, 460, 260, 0xffffff)
       .setStrokeStyle(3, 0x222222)
       .setOrigin(0.5);
 
+    // Title
     this.add.text(centerX, centerY - 70, 'New High Score!', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '26px',
       color: '#111'
     }).setOrigin(0.5);
 
+    // Score
     this.add.text(centerX, centerY - 30, `Your Score: ${total}`, {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '20px',
       color: '#333'
     }).setOrigin(0.5);
 
-    // Create HTML input for name
+    // --- HTML Input ---
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = 'Enter your name';
@@ -256,21 +264,19 @@ class NameEntryScene extends Phaser.Scene {
     input.style.background = '#fff';
     input.style.zIndex = '10';
 
-    // Position input centered above the Submit button
+    // Position input centered above Submit button
     const canvasBounds = this.sys.canvas.getBoundingClientRect();
-    const inputX = canvasBounds.left + canvasBounds.width / 2 - 110; // half of 220px
-    const inputY = canvasBounds.top + canvasBounds.height / 2 + 10;  // 10px above button
+    const inputX = canvasBounds.left + 190; // (600 canvas width - 220 input width)/2 = 190
+    const inputY = canvasBounds.top + (centerY - 10); // same vertical alignment as others
     input.style.left = `${inputX}px`;
     input.style.top = `${inputY}px`;
-
     document.body.appendChild(input);
 
-    // Submit button
+    // --- Submit Button ---
     const btnY = centerY + 60;
     const btn = this.add.rectangle(centerX, btnY, 140, 40, 0x333333)
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
-
     const text = this.add.text(centerX, btnY, 'Submit', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '18px',
@@ -301,15 +307,14 @@ class NameEntryScene extends Phaser.Scene {
       this.scene.start('SummaryScene', { words, total });
     });
 
-    // Recenter input when window resizes
+    // Recenter input if window resizes
     window.addEventListener('resize', () => {
       const rect = this.sys.canvas.getBoundingClientRect();
-      input.style.left = `${rect.left + rect.width / 2 - 110}px`;
-      input.style.top  = `${rect.top + rect.height / 2 + 10}px`;
+      input.style.left = `${rect.left + 190}px`;
+      input.style.top  = `${rect.top + (centerY - 10)}px`;
     });
   }
 }
-
 
 
 
@@ -849,6 +854,12 @@ function resetGameState() {
   nextLetter = '';
 }
 
+window.addEventListener('resize', () => {
+  const game = Phaser.GAMES[0];
+  if (game && game.scale) {
+    game.scale.resize(window.innerWidth, window.innerHeight);
+  }
+});
 
 
 // ===================== Boot Game (attach scenes here) =====================
