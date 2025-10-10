@@ -12,12 +12,11 @@ const gameConfig = {
   height: 900,
   backgroundColor: '#fafafa',
 scale: {
-  mode: Phaser.Scale.ENVELOP,   // fills screen as much as possible
+  mode: Phaser.Scale.FIT,
   autoCenter: Phaser.Scale.CENTER_BOTH,
   parent: 'phaser-game',
-  width: window.innerWidth,
-  height: window.innerHeight,
-  expandParent: true
+  width: Math.max(window.innerWidth, 400),
+  height: Math.max(window.innerHeight, 700)
 }
 
 }
@@ -863,7 +862,25 @@ window.addEventListener('resize', () => {
 
 
 // ===================== Boot Game (attach scenes here) =====================
-new Phaser.Game({
-  ...gameConfig,
-  scene: [MainScene, NameEntryScene, SummaryScene, LeaderboardScene]
+window.addEventListener('load', () => {
+  const game = new Phaser.Game({
+    ...gameConfig,
+    scene: [MainScene, NameEntryScene, SummaryScene, LeaderboardScene]
+  });
+
+  // Force resize after load (fixes white screen on mobile)
+  setTimeout(() => {
+    if (game && game.scale) {
+      game.scale.resize(window.innerWidth, window.innerHeight);
+    }
+  }, 500);
 });
+
+window.addEventListener('resize', () => {
+  const game = Phaser.GAMES[0];
+  if (game && game.scale) {
+    game.scale.resize(window.innerWidth, window.innerHeight);
+  }
+});
+
+
