@@ -5,21 +5,24 @@ const supabase = window.supabase.createClient(
 );
 
 // ===================== Game State =====================
-// ===================== Config (no forward refs) =====================
+// ===================== Config =====================
 const gameConfig = {
   type: Phaser.AUTO,
-  width: 600,
-  height: 900,
   backgroundColor: '#fafafa',
-scale: {
-  mode: Phaser.Scale.FIT,
-  autoCenter: Phaser.Scale.CENTER_BOTH,
   parent: 'phaser-game',
-  width: Math.max(window.innerWidth, 400),
-  height: Math.max(window.innerHeight, 700)
-}
 
-}
+  // Let Phaser compute size from the browser window
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: window.innerWidth,
+    height: window.innerHeight
+  },
+
+  // Force WebGL for better mobile support
+  render: { pixelArt: false, antialias: true }
+};
+
 
 
 const GRID_SIZE = 5;
@@ -321,15 +324,21 @@ class NameEntryScene extends Phaser.Scene {
 function preload() {}
 
 function create() {
-  const GRID_LEFT = (gameConfig.width - GRID_SIZE * CELL_SIZE) / 2;
-  const GRID_TOP  = 100;
+  // --- Get live canvas size ---
+  const canvasWidth = this.sys.game.scale.gameSize.width;
+  const canvasHeight = this.sys.game.scale.gameSize.height;
 
-  // Grid
+  // --- Grid placement ---
+  const GRID_LEFT = (canvasWidth - GRID_SIZE * CELL_SIZE) / 2;
+  const GRID_TOP = Math.max(60, (canvasHeight - (GRID_SIZE * CELL_SIZE + 300)) / 2); 
+  // adds some top margin; scales on mobile
+
+  // --- Build grid ---
   for (let row = 0; row < GRID_SIZE; row++) {
     grid[row] = [];
     for (let col = 0; col < GRID_SIZE; col++) {
       const x = GRID_LEFT + col * CELL_SIZE + CELL_SIZE / 2;
-      const y = GRID_TOP  + row * CELL_SIZE + CELL_SIZE / 2;
+      const y = GRID_TOP + row * CELL_SIZE + CELL_SIZE / 2;
 
       const rect = this.add.rectangle(x, y, CELL_SIZE, CELL_SIZE, 0xffffff)
         .setStrokeStyle(2, 0x000000)
@@ -346,19 +355,13 @@ function create() {
 
       rect.on('pointerdown', () => placeLetter(row, col));
 
-      grid[row][col] = {
-        rect,
-        highlightRect: highlight,
-        letterText,
-        filled: false,
-        rowValid: false,
-        colValid: false,
-      };
+      grid[row][col] = { rect, highlightRect: highlight, letterText, filled: false, rowValid: false, colValid: false };
     }
   }
 
-  // ===================== Top UI Row =====================
+  // --- Top UI row ---
   const uiY = 10;
+  const centerX = canvasWidth / 2;
 
   this.onDeckText = this.add.text(20, uiY, 'On Deck: ', {
     fontFamily: 'Arial Black, Verdana, sans-serif',
@@ -367,7 +370,6 @@ function create() {
     color: '#333'
   }).setOrigin(0, 0);
 
-  const centerX = gameConfig.width / 2;
   this.nextLetterBox = this.add.rectangle(centerX, uiY, 80, 80, 0xffffff, 1)
     .setStrokeStyle(3, 0x000000)
     .setOrigin(0.5, 0);
@@ -379,14 +381,14 @@ function create() {
     color: '#007bff'
   }).setOrigin(0.5);
 
-  scoreText = this.add.text(gameConfig.width - 20, uiY + 12, 'Score: 0', {
+  scoreText = this.add.text(canvasWidth - 20, uiY + 12, 'Score: 0', {
     fontFamily: 'Arial Black, Verdana, sans-serif',
     fontSize: '20px',
     fontStyle: 'bold',
     color: '#000'
   }).setOrigin(1, 0.5);
 
-  // Row score labels
+  // --- Row & column labels ---
   for (let r = 0; r < GRID_SIZE; r++) {
     const x = GRID_LEFT + GRID_SIZE * CELL_SIZE + 16;
     const y = GRID_TOP + r * CELL_SIZE + CELL_SIZE / 2;
@@ -398,7 +400,6 @@ function create() {
     }).setOrigin(0, 0.5);
   }
 
-  // Column score labels
   for (let c = 0; c < GRID_SIZE; c++) {
     const x = GRID_LEFT + c * CELL_SIZE + CELL_SIZE / 2;
     const y = GRID_TOP + GRID_SIZE * CELL_SIZE + 8;
@@ -410,35 +411,33 @@ function create() {
     }).setOrigin(0.5, 0);
   }
 
-  // ===================== Swap Lights (3 total) =====================
-  const lightsY = 100 + GRID_SIZE * CELL_SIZE + 60; // just below the grid
-  const startX = gameConfig.width / 2 - 60;
-
+  // --- Swap Lights ---
+  const lightsY = GRID_TOP + GRID_SIZE * CELL_SIZE + 60;
+  const startX = canvasWidth / 2 - 60;
   for (let i = 0; i < 3; i++) {
     const light = this.add.circle(startX + i * 60, lightsY, 12, 0xcccccc);
     light.setStrokeStyle(2, 0x555555);
     swapIndicators.push(light);
   }
+  updateSwapIndicators();
 
-updateSwapIndicators();
-
-
-  // Label
-  this.add.text(gameConfig.width / 2, lightsY + 20, 'Swaps Used', {
+  this.add.text(canvasWidth / 2, lightsY + 20, 'Swaps Used', {
     fontFamily: 'Verdana, sans-serif',
     fontSize: '12px',
     color: '#555'
   }).setOrigin(0.5, 0);
 
-
-    // Mini leaderboard under the grid
+  // --- Mini Leaderboard ---
   initMiniLeaderboardUI(this);
   updateMiniLeaderboard(this);
 
+  // --- Initialize letters ---
   pickNextLetter();
   updateNextLetterUI(this, false);
-
 }
+
+
+
 
 function update() {}
 
@@ -861,26 +860,29 @@ window.addEventListener('resize', () => {
 });
 
 
-// ===================== Boot Game (attach scenes here) =====================
-window.addEventListener('load', () => {
+
+// ===================== Boot Game =====================
+function launchGame() {
   const game = new Phaser.Game({
     ...gameConfig,
     scene: [MainScene, NameEntryScene, SummaryScene, LeaderboardScene]
   });
 
-  // Force resize after load (fixes white screen on mobile)
+  // Resize once after a short delay (mobile fix)
   setTimeout(() => {
-    if (game && game.scale) {
-      game.scale.resize(window.innerWidth, window.innerHeight);
-    }
-  }, 500);
-});
-
-window.addEventListener('resize', () => {
-  const game = Phaser.GAMES[0];
-  if (game && game.scale) {
     game.scale.resize(window.innerWidth, window.innerHeight);
-  }
-});
+  }, 300);
+
+  // Keep canvas filling viewport on rotation/resize
+  window.addEventListener('resize', () => {
+    game.scale.resize(window.innerWidth, window.innerHeight);
+  });
+}
+
+if (document.readyState === 'complete') {
+  launchGame();
+} else {
+  window.addEventListener('load', launchGame);
+}
 
 
