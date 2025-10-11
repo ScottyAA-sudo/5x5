@@ -4,6 +4,10 @@ const supabase = window.supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6dG92YnpxdWJ5cGdkc2t5cGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyODM2NTIsImV4cCI6MjA3NDg1OTY1Mn0.DkWqGmN0B-9AUj7kr6B11hhhnB0b2BKFpOsnrixFNQU"
 );
 
+if (screen.orientation && screen.orientation.lock) {
+  screen.orientation.lock('portrait').catch(() => {});
+}
+
 // ===================== Game State =====================
 // ===================== Config =====================
 const gameConfig = {
@@ -524,25 +528,94 @@ const Z = {
     color: '#555'
   }).setOrigin(0.5, 0);
 
-// --- Legend (under swap lights, centered, semi-transparent) ---
+// --- Rules + Legend Box ---
 {
-  const legendY = lightsY + 60;  // space below "Swaps Used"
-  const legendX = canvasWidth / 2;
-  const legendSpacing = 110;     // horizontal distance between color boxes
+  const boxY = lightsY + 60;       // start below "Swaps Used"
+  const boxWidth = Math.min(canvasWidth * 0.9, 480);
+  const boxHeight = 200;
+  const boxX = canvasWidth / 2;
 
-  const drawLegendItem = (color, label, offsetX) => {
-    // Slight transparency to match in-game highlights
-    const box = this.add.rectangle(legendX + offsetX, legendY, 18, 18, color, 0.6).setOrigin(0.5);
-    box.setStrokeStyle(1, 0x444444, 0.8);
+  // Light background box (slightly translucent)
+  const box = this.add.rectangle(
+    boxX,
+    boxY + boxHeight / 2,
+    boxWidth,
+    boxHeight,
+    0xffffff,
+    0.92
+  )
+    .setStrokeStyle(2, 0x999999)
+    .setOrigin(0.5)
+    .setDepth(0);
 
-    this.add.text(legendX + offsetX + 16, legendY, label, {
+  // --- Title ---
+  const titleText =
+    '3-letter words = 5 pts | 4-letter = 15 pts | 5-letter = 25 pts';
+  const title = this.add.text(boxX, 0, titleText, {
+    fontFamily: 'Arial Black, Verdana, sans-serif',
+    fontSize: '12px',
+    color: '#333',
+  }).setOrigin(0.5, 0);
+
+  // --- Rules list ---
+  const rules = [
+    '• Words must start from the top row or far-left column',
+    '• You can make 3 "swaps" overwriting a placed letter',
+    '• The game ends when all letters have been placed',
+  ];
+
+  // estimate content heights
+  const titleHeight = 18;
+  const rulesHeight = rules.length * 22;
+  const legendHeight = 26;
+  const totalContentHeight = titleHeight + rulesHeight + legendHeight + 40; // 40px includes divider & padding
+
+  // compute starting Y so everything is vertically centered
+  const startY = boxY + (boxHeight - totalContentHeight) / 2;
+
+  // position title
+  title.setY(startY);
+
+  // position rules under title, centered
+  let textY = startY + titleHeight + 8;
+  rules.forEach((line) => {
+    const ruleText = this.add.text(boxX, textY, line, {
       fontFamily: 'Verdana, sans-serif',
       fontSize: '14px',
-      color: '#333'
+      color: '#333',
+      align: 'center',
+      wordWrap: { width: boxWidth - 60 },
+    }).setOrigin(0.5, 0);  // center horizontally
+    textY += 22;
+  });
+
+  // --- Divider line ---
+  this.add.line(
+    boxX,
+    textY + 6,
+    boxX - boxWidth / 2 + 10,
+    textY + 6,
+    boxX + boxWidth / 2 - 10,
+    textY + 6,
+    0xcccccc
+  )
+    .setOrigin(0.5, 0)
+    .setLineWidth(1);
+
+  // --- Legend items below rules ---
+  const legendY = textY + 28;
+  const legendSpacing = 110;
+
+  const drawLegendItem = (color, label, offsetX) => {
+    const rect = this.add.rectangle(boxX + offsetX, legendY, 18, 18, color, 0.6).setOrigin(0.5);
+    rect.setStrokeStyle(1, 0x444444, 0.8);
+    this.add.text(boxX + offsetX + 16, legendY, label, {
+      fontFamily: 'Verdana, sans-serif',
+      fontSize: '14px',
+      color: '#333',
     }).setOrigin(0, 0.5);
   };
 
-  // Highlight colors with matching meanings:
   drawLegendItem(0xfff066, 'Horizontal', -legendSpacing);
   drawLegendItem(0x66ccff, 'Vertical', 0);
   drawLegendItem(0x66cc66, 'Both', legendSpacing);
@@ -672,7 +745,7 @@ function initMiniLeaderboardUI(scene) {
   const canvasWidth = scene.sys.game.scale.gameSize.width;
   const GRID_TOP = 100;
   const GRID_BOTTOM = GRID_TOP + GRID_SIZE * CELL_SIZE;
-  const startY = GRID_BOTTOM + 300;
+  const startY = GRID_BOTTOM + 480;
 
   miniLBHeader = scene.add.text(canvasWidth / 2, startY, 'Top 5 All-Time', {
     fontFamily: 'Arial Black, Verdana, sans-serif',
@@ -971,12 +1044,12 @@ function resetGameState() {
   nextLetter = '';
 }
 
-window.addEventListener('resize', () => {
-  const game = Phaser.GAMES[0];
-  if (game && game.scale) {
-    game.scale.resize(window.innerWidth, window.innerHeight);
-  }
-});
+// window.addEventListener('resize', () => {
+// const game = Phaser.GAMES[0];
+// if (game && game.scale) {
+// game.scale.resize(window.innerWidth, window.innerHeight);
+//  }
+// });
 
 
 
@@ -993,9 +1066,9 @@ function launchGame() {
   }, 300);
 
   // Keep canvas filling viewport on rotation/resize
-  window.addEventListener('resize', () => {
-    game.scale.resize(window.innerWidth, window.innerHeight);
-  });
+  // window.addEventListener('resize', () => {
+  //  game.scale.resize(window.innerWidth, window.innerHeight);
+  // });
 }
 
 if (document.readyState === 'complete') {
