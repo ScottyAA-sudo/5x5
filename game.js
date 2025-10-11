@@ -184,70 +184,91 @@ class LeaderboardScene extends Phaser.Scene {
     const centerX = width / 2;
     const centerY = height / 2;
 
-    // Responsive card size
-    const cardWidth = Math.min(460, width * 0.8);
-    const cardHeight = Math.min(460, height * 0.65);
+    // Responsive card
+    const cardWidth  = Math.min(460, width * 0.8);
+    const cardHeight = Math.min(540, height * 0.78);
 
-    // Background overlay
-    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.5).setDepth(0);
-
-    // Card container
+    // Overlay & card
+    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.5);
     const card = this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0xffffff)
       .setStrokeStyle(3, 0x222222)
-      .setOrigin(0.5)
-      .setDepth(0);
-    this.tweens.add({ targets: card, alpha: 1, duration: 250 });
+      .setOrigin(0.5);
 
     // Title
-    this.add.text(centerX, centerY - cardHeight / 2 + 50, 'Top 5 Scores', {
+    this.add.text(centerX, centerY - cardHeight / 2 + 50, 'Leaderboard', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '28px',
       color: '#111'
-    }).setOrigin(0.5).setDepth(1);
+    }).setOrigin(0.5);
 
-    // Fetch scores
-    const { data: scores = [] } = await supabase
+    // Fetch ALL-TIME
+    const { data: allTime = [] } = await supabase
       .from('scores')
       .select('*')
       .order('score', { ascending: false })
       .limit(5);
 
-    // List of scores
-    const listStartY = centerY - cardHeight / 2 + 100;
-    let y = listStartY;
+    // Fetch WEEKLY (past 7 days)
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const { data: weekly = [] } = await supabase
+      .from('scores')
+      .select('*')
+      .gte('created_at', oneWeekAgo.toISOString())
+      .order('score', { ascending: false })
+      .limit(5);
 
-    scores.forEach((s, i) => {
-      const nameX = centerX - cardWidth / 2 + 40;
-      const scoreX = centerX + cardWidth / 2 - 100;
-      const dateX = centerX + cardWidth / 2 - 40;
+    // Section headers
+    const sectionY1 = centerY - cardHeight / 2 + 100;   // All-Time section top
+    const sectionY2 = sectionY1 + 190;                   // Weekly section top (stacked)
 
-      this.add.text(nameX, y, `${i + 1}. ${s.name}`, { fontSize: '20px', color: '#111' }).setDepth(1);
-      this.add.text(scoreX, y, `${s.score}`, { fontSize: '20px', color: '#111' })
-        .setOrigin(1, 0).setDepth(1);
+    this.add.text(centerX, sectionY1, 'Top 5 All-Time', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '18px',
+      color: '#333'
+    }).setOrigin(0.5);
 
-      const date = new Date(s.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' });
-      this.add.text(dateX, y, date, { fontSize: '18px', color: '#666' })
-        .setOrigin(1, 0).setDepth(1);
+    this.add.text(centerX, sectionY2, 'Top 5 This Week', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '18px',
+      color: '#333'
+    }).setOrigin(0.5);
 
-      y += 32;
-    });
+    // Render helper
+    const renderList = (list, startY) => {
+      let y = startY + 25;
+      list.forEach((s, i) => {
+        const date = new Date(s.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' });
+        // Name (left)
+        this.add.text(centerX - cardWidth / 2 + 40, y, `${i + 1}. ${s.name}`, { fontSize: '18px', color: '#111' });
+        // Score (right-aligned)
+        this.add.text(centerX + cardWidth / 2 - 100, y, `${s.score}`, { fontSize: '18px', color: '#111' }).setOrigin(1, 0);
+        // Date (far right)
+        this.add.text(centerX + cardWidth / 2 - 40, y, date, { fontSize: '16px', color: '#666' }).setOrigin(1, 0);
+        y += 26;
+      });
+    };
 
-    // Button (centered)
+    renderList(allTime, sectionY1);
+    renderList(weekly, sectionY2);
+
+    // Button
     const buttonY = centerY + cardHeight / 2 - 50;
-    const btn = this.add.rectangle(centerX, buttonY, 160, 44, 0x333333, 1)
+    const btn = this.add.rectangle(centerX, buttonY, 160, 44, 0x333333)
       .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(1);
-    const text = this.add.text(centerX, buttonY, 'New Game', {
+      .setInteractive({ useHandCursor: true });
+    this.add.text(centerX, buttonY, 'New Game', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '18px',
       color: '#fff'
-    }).setOrigin(0.5).setDepth(1);
+    }).setOrigin(0.5);
+
     btn.on('pointerover', () => btn.setFillStyle(0x555555));
-    btn.on('pointerout', () => btn.setFillStyle(0x333333));
+    btn.on('pointerout',  () => btn.setFillStyle(0x333333));
     btn.on('pointerdown', () => { resetGameState(); this.scene.start('MainScene'); });
   }
 }
+
 
 
 // ===================== Name Entry Scene =====================
@@ -447,6 +468,7 @@ function create() {
     }).setOrigin(0.5, 0);
   }
 
+
   // --- Swap Lights ---
   const lightsY = GRID_TOP + GRID_SIZE * CELL_SIZE + 60;
   const startX = canvasWidth / 2 - 60;
@@ -463,6 +485,28 @@ function create() {
     color: '#555'
   }).setOrigin(0.5, 0);
 
+  // --- Legend (under swap lights, centered) ---
+{
+  const legendY = lightsY + 70;  // slightly below the "Swaps Used" label
+  const legendX = canvasWidth / 2;
+  const legendSpacing = 110;     // distance between the color boxes
+
+  const drawLegendItem = (color, label, offsetX) => {
+    const box = this.add.rectangle(legendX + offsetX, legendY, 18, 18, color).setOrigin(0.5);
+    this.add.text(legendX + offsetX + 16, legendY, label, {
+      fontFamily: 'Verdana, sans-serif',
+      fontSize: '14px',
+      color: '#333'
+    }).setOrigin(0, 0.5);
+  };
+
+  // Matches your highlight colors:
+  drawLegendItem(0xfff066, 'Horizontal', -legendSpacing);
+  drawLegendItem(0x66ccff, 'Vertical', 0);
+  drawLegendItem(0x66cc66, 'Both', legendSpacing);
+}
+
+
   // --- Mini Leaderboard ---
   initMiniLeaderboardUI(this);
   updateMiniLeaderboard(this);
@@ -471,7 +515,6 @@ function create() {
   pickNextLetter();
   updateNextLetterUI(this, false);
 }
-
 
 
 
@@ -587,7 +630,7 @@ function initMiniLeaderboardUI(scene) {
   const canvasWidth = scene.sys.game.scale.gameSize.width;
   const GRID_TOP = 100;
   const GRID_BOTTOM = GRID_TOP + GRID_SIZE * CELL_SIZE;
-  const startY = GRID_BOTTOM + 240;
+  const startY = GRID_BOTTOM + 300;
 
   miniLBHeader = scene.add.text(canvasWidth / 2, startY, 'Top 5 All-Time', {
     fontFamily: 'Arial Black, Verdana, sans-serif',
