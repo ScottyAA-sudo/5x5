@@ -485,14 +485,17 @@ function create() {
     color: '#555'
   }).setOrigin(0.5, 0);
 
-  // --- Legend (under swap lights, centered) ---
+// --- Legend (under swap lights, centered, semi-transparent) ---
 {
-  const legendY = lightsY + 70;  // slightly below the "Swaps Used" label
+  const legendY = lightsY + 60;  // space below "Swaps Used"
   const legendX = canvasWidth / 2;
-  const legendSpacing = 110;     // distance between the color boxes
+  const legendSpacing = 110;     // horizontal distance between color boxes
 
   const drawLegendItem = (color, label, offsetX) => {
-    const box = this.add.rectangle(legendX + offsetX, legendY, 18, 18, color).setOrigin(0.5);
+    // Slight transparency to match in-game highlights
+    const box = this.add.rectangle(legendX + offsetX, legendY, 18, 18, color, 0.6).setOrigin(0.5);
+    box.setStrokeStyle(1, 0x444444, 0.8);
+
     this.add.text(legendX + offsetX + 16, legendY, label, {
       fontFamily: 'Verdana, sans-serif',
       fontSize: '14px',
@@ -500,7 +503,7 @@ function create() {
     }).setOrigin(0, 0.5);
   };
 
-  // Matches your highlight colors:
+  // Highlight colors with matching meanings:
   drawLegendItem(0xfff066, 'Horizontal', -legendSpacing);
   drawLegendItem(0x66ccff, 'Vertical', 0);
   drawLegendItem(0x66cc66, 'Both', legendSpacing);
