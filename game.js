@@ -383,11 +383,21 @@ function create() {
   const canvasWidth = this.sys.game.scale.gameSize.width;
   const canvasHeight = this.sys.game.scale.gameSize.height;
 
+// Depths so we control draw order
+const Z = {
+  CELL: 10,        // white grid squares
+  HIGHLIGHT: 20,   // yellow/blue/green highlight rects
+  LETTER: 30,      // tile letters
+  DECOR: 15        // the faint "5×5" watermark (between CELL and HIGHLIGHT)
+};
+
+
   // --- Grid placement ---
   const GRID_LEFT = (canvasWidth - GRID_SIZE * CELL_SIZE) / 2;
   const GRID_RIGHT = GRID_LEFT + GRID_SIZE * CELL_SIZE;
   const GRID_TOP = Math.max(60, (canvasHeight - (GRID_SIZE * CELL_SIZE + 300)) / 2); 
   // adds some top margin; scales on mobile
+
 
   // --- Build grid ---
   for (let row = 0; row < GRID_SIZE; row++) {
@@ -414,6 +424,35 @@ function create() {
       grid[row][col] = { rect, highlightRect: highlight, letterText, filled: false, rowValid: false, colValid: false };
     }
   }
+
+// --- Subtle "5×5" watermark centered on the grid ---
+{
+  const gridWidth  = GRID_SIZE * CELL_SIZE;
+  const gridHeight = GRID_SIZE * CELL_SIZE;
+  const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
+  const gridCenterY = GRID_TOP + gridHeight / 2;
+
+  const bgText = this.add.text(gridCenterX, gridCenterY, '5×5', {
+    // feel free to swap in a stylized/display font you’ve loaded via CSS
+    fontFamily: 'Arial Black, Verdana, sans-serif',
+    fontSize: `${CELL_SIZE * 2.6}px`,
+    fontStyle: 'bold',
+    color: '#000000'
+  })
+    .setOrigin(0.5)
+    .setAlpha(0.10)        // subtle but visible
+    .setAngle(-10)         // tasteful tilt
+    .setDepth(Z.DECOR);    // sits above cells, below highlights/letters
+
+  // Optional soft fade-in
+  this.tweens.add({
+    targets: bgText,
+    alpha: { from: 0, to: 0.06 },
+    duration: 600,
+    ease: 'Quad.easeOut'
+  });
+}
+
 
     // --- Top UI row ---
     const uiY = 10;
