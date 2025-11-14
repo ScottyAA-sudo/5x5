@@ -1086,14 +1086,20 @@ class SummaryScene extends Phaser.Scene {
       y += 26;
     });
 
-    const buttonY = centerY + cardHeight / 2 - 60;
-
-    const makeBtn = (label, offsetX, onClick, width = 160) => {
-      const btn = this.add.rectangle(centerX + offsetX, buttonY, width, 44, 0x2a2a2a)
+    const buttonHeight = 44;
+    const buttonGap = 12;
+    const buttonConfigs = [
+      { label: 'Leaderboard', action: () => this.scene.start('LeaderboardScene') },
+      { label: 'Submit Score', action: () => this.scene.start('NameEntryScene', { total, words }) },
+      { label: 'New Game', action: () => this.scene.start('MainScene') }
+    ];
+    const isNarrow = width < 520;
+    const makeBtn = (label, offsetX, y, btnWidth, onClick) => {
+      const btn = this.add.rectangle(centerX + offsetX, y, btnWidth, buttonHeight, 0x2a2a2a)
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
         .setDepth(1);
-      this.add.text(centerX + offsetX, buttonY, label, {
+      this.add.text(centerX + offsetX, y, label, {
         fontFamily: 'Arial Black, Verdana, sans-serif',
         fontSize: '18px',
         color: LIGHT_TEXT
@@ -1103,11 +1109,24 @@ class SummaryScene extends Phaser.Scene {
       btn.on('pointerdown', onClick);
     };
 
-    makeBtn('Leaderboard', -180, () => this.scene.start('LeaderboardScene'));
-    makeBtn('Submit Score', 0, () => {
-      this.scene.start('NameEntryScene', { total, words });
-    }, 180);
-    makeBtn('New Game', 180, () => { this.scene.start('MainScene'); });
+    if (isNarrow) {
+      const usableWidth = Math.max(Math.min(cardWidth - 60, 280), 180);
+      const totalStackHeight = buttonConfigs.length * buttonHeight + (buttonConfigs.length - 1) * buttonGap;
+      const bottomMargin = 24;
+      const blockBottom = centerY + cardHeight / 2 - bottomMargin;
+      const startY = blockBottom - totalStackHeight + buttonHeight / 2;
+      buttonConfigs.forEach((cfg, idx) => {
+        const yPos = startY + idx * (buttonHeight + buttonGap);
+        makeBtn(cfg.label, 0, yPos, usableWidth, cfg.action);
+      });
+    } else {
+      const buttonY = centerY + cardHeight / 2 - 60;
+      const offsets = [-180, 0, 180];
+      const btnWidth = 160;
+      buttonConfigs.forEach((cfg, idx) => {
+        makeBtn(cfg.label, offsets[idx], buttonY, btnWidth, cfg.action);
+      });
+    }
   }
 }
 
@@ -1248,26 +1267,46 @@ class NameEntryScene extends Phaser.Scene {
       color: '#e8e8e8'
     }).setOrigin(0.5);
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = 'Enter your name';
-    input.style.position = 'absolute';
-    input.style.width = '220px';
-    input.style.padding = '6px';
-    input.style.fontSize = '16px';
-    input.style.border = '2px solid #333';
-    input.style.borderRadius = '6px';
-    input.style.textAlign = 'center';
-    input.style.background = '#1f1f1f';
-    input.style.color = '#f4f4f4';
-    input.style.zIndex = '10';
+    const inputWidth = Math.min(240, cardWidth - 80);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Enter your name';
+    input.style.position = 'absolute';
+    input.style.width = `${inputWidth}px`;
+    input.style.padding = '8px';
+    input.style.fontSize = '16px';
+    input.style.border = '2px solid #333';
+    input.style.borderRadius = '8px';
+    input.style.textAlign = 'center';
+    input.style.background = '#1f1f1f';
+    input.style.color = '#f4f4f4';
+    input.style.zIndex = '10';
+    input.style.boxShadow = '0 8px 18px rgba(0,0,0,0.5)';
+    document.body.appendChild(input);
 
-    const canvasBounds = this.sys.canvas.getBoundingClientRect();
-    const inputX = canvasBounds.left + centerX - 110; 
-    const inputY = canvasBounds.top + (centerY - 10); 
-    input.style.left = `${inputX}px`;
-    input.style.top = `${inputY}px`;
-    document.body.appendChild(input);
+    const inputAnchorY = centerY - cardHeight / 2 + 150;
+    const repositionInput = () => {
+      if (!input.parentNode) return;
+      const bounds = this.sys.canvas.getBoundingClientRect();
+      const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+      const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      const left = bounds.left + scrollX + centerX - input.offsetWidth / 2;
+      const top = bounds.top + scrollY + inputAnchorY - input.offsetHeight / 2;
+      input.style.left = `${left}px`;
+      input.style.top = `${top}px`;
+    };
+    setTimeout(repositionInput, 0);
+    window.addEventListener('resize', repositionInput);
+    window.addEventListener('scroll', repositionInput, true);
+    const cleanupInput = () => {
+      window.removeEventListener('resize', repositionInput);
+      window.removeEventListener('scroll', repositionInput, true);
+      if (input.parentNode) {
+        input.parentNode.remove();
+      }
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupInput);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanupInput);
 
     const btnY = centerY + 60;
     const btn = this.add.rectangle(centerX, btnY, 140, 40, 0x2a2a2a)
@@ -1282,13 +1321,13 @@ class NameEntryScene extends Phaser.Scene {
     btn.on('pointerover', () => btn.setFillStyle(0x444444));
     btn.on('pointerout',  () => btn.setFillStyle(0x2a2a2a));
 
-    btn.on('pointerdown', async () => {
-      const playerName = input.value.trim() || 'Anonymous';
-      document.body.removeChild(input);
+    btn.on('pointerdown', async () => {
+      const playerName = input.value.trim() || 'Anonymous';
+      cleanupInput();
 
-      try {
-        const { data, error } = await supabase
-          .from('scores')
+      try {
+        const { data, error } = await supabase
+          .from('scores')
           .insert([{ name: playerName, score: total }])
           .select();
         if (error) throw error;
@@ -1301,11 +1340,6 @@ class NameEntryScene extends Phaser.Scene {
       this.scene.start('SummaryScene', { words, total });
     });
 
-    window.addEventListener('resize', () => {
-      const rect = this.sys.canvas.getBoundingClientRect();
-      input.style.left = `${rect.left + 190}px`;
-      input.style.top  = `${rect.top + (centerY - 10)}px`;
-    });
   }
 }
 
