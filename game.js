@@ -116,8 +116,7 @@ class MainScene extends Phaser.Scene {
     // --- 3. Grid Placement ---
     const GRID_LEFT = (canvasWidth - GRID_SIZE * CELL_SIZE) / 2;
     const GRID_RIGHT = GRID_LEFT + GRID_SIZE * CELL_SIZE;
-    const minGridTop = this.isMobile ? 160 : 110;
-    const GRID_TOP = Math.max(minGridTop, (canvasHeight - (GRID_SIZE * CELL_SIZE + 320)) / 2);
+    const GRID_TOP = Math.max(60, (canvasHeight - (GRID_SIZE * CELL_SIZE + 300)) / 2);
 
     // --- 4. Build Grid ---
     for (let row = 0; row < GRID_SIZE; row++) {
@@ -174,44 +173,33 @@ class MainScene extends Phaser.Scene {
     // --- 6. Top UI Row ---
     const uiY = 10;
     const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
-    const gridPixelWidth = GRID_SIZE * CELL_SIZE;
-    const instructionWidth = gridPixelWidth - 24;
-    const nextLetterBottom = uiY + 80;
-    const turnMaxBottom = Math.max(GRID_TOP - 16, nextLetterBottom + 20);
-    this.turnTextBounds = {
-      minTop: nextLetterBottom + 6,
-      preferredTop: this.isMobile ? nextLetterBottom + 10 : nextLetterBottom + 18,
-      maxBottom: turnMaxBottom
-    };
+    const instructionWidth = GRID_SIZE * CELL_SIZE - 24;
+    const turnFontSize = this.isMobile ? '14px' : '16px';
     // Removed "On Deck" label; nextLetterBox displays current CPU letter.
-    this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
-      .setStrokeStyle(3, 0x555555)
-      .setOrigin(0.5, 0);
-    this.nextLetterText = this.add.text(gridCenterX, uiY + 40, '', {
+    this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
+      .setStrokeStyle(3, 0x555555)
+      .setOrigin(0.5, 0);
+    this.nextLetterText = this.add.text(gridCenterX, uiY + 40, '', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '48px',
       fontStyle: 'bold',
       color: '#82c4ff'
     }).setOrigin(0.5);
-    this.scoreText = this.add.text(GRID_RIGHT, uiY + 12, 'Score: 0', {
+    this.scoreText = this.add.text(GRID_RIGHT, uiY + 12, 'Score: 0', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '20px',
+      fontStyle: 'bold',
+      color: LIGHT_TEXT
+    }).setOrigin(1, 0.5);
+    this.turnText = this.add.text(gridCenterX, uiY + 95, '', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '20px',
-      fontStyle: 'bold',
-      color: LIGHT_TEXT
-    }).setOrigin(1, 0.5);
-    this.turnText = this.add.text(gridCenterX, this.turnTextBounds.preferredTop, '', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: this.isMobile ? '14px' : '16px',
+      fontSize: turnFontSize,
       fontStyle: 'bold',
       color: LIGHT_TEXT,
       align: 'center',
-      wordWrap: {
-        width: instructionWidth,
-        useAdvancedWrap: true
-      },
+      wordWrap: { width: instructionWidth, useAdvancedWrap: true },
       lineSpacing: 4
     }).setOrigin(0.5, 0);
-    this.layoutTurnText();
 
     // --- 7. Row & Column Labels ---
     for (let r = 0; r < GRID_SIZE; r++) {
@@ -303,11 +291,10 @@ class MainScene extends Phaser.Scene {
       drawLegendItem(COLOR_BOTH, 'Both', legendSpacing);
     }
 
-    // --- 10. Setup Input and Start Game ---
-    this.setupKeyboardInput();
-    this.createMobileKeyboard();
-    this.startCpuTurn();
-  }
+    // --- 10. Setup Input and Start Game ---
+    this.setupKeyboardInput();
+    this.startCpuTurn();
+  }
 
   update() {
     // Runs every frame
@@ -333,6 +320,7 @@ async placeLetter(row, col) {
     return this.handlePlayerClick(row, col);
   }
 }
+
 /**
  * CPU prepares its next letter and waits for the player to place it.
  */
@@ -344,7 +332,7 @@ startCpuTurn() {
   this.currentLetter = this.pickNextLetter();
   this.updateNextLetterUI(true);
   const swapsLeft = Math.max(0, 3 - (this.swapsUsed || 0));
-  this.setTurnMessage(`Place this letter in an empty square or replace an occupied square (Swaps left: ${swapsLeft}).`);
+  this.turnText.setText(`Place this letter in an empty square or replace an occupied square (Swaps left: ${swapsLeft}).`);
   this.clearSelectionState();
 }
 
@@ -357,7 +345,7 @@ async handleCpuPlacement(row, col) {
 
   const replacingExisting = cell.filled;
   if (replacingExisting && this.swapsUsed >= 3) {
-    this.setTurnMessage("All swaps used. Pick an empty square for the CPU letter.");
+    this.turnText.setText("All swaps used. Pick an empty square for the CPU letter.");
     return;
   }
 
@@ -395,9 +383,9 @@ startPlayerTurn() {
   this.currentLetter = ""; // clear CPU letter
   this.updateNextLetterUI(false);
   if (this.isMobile) {
-    this.setTurnMessage("Your turn: tap a square (or occupied to swap), then pick a letter below to lock it in.");
+    this.turnText.setText("Your turn: pick an empty square (or an occupied one to swap), type a letter, then press Enter.");
   } else {
-    this.setTurnMessage("Your turn: pick a square (or occupied to swap), then press a letter key to place it.");
+    this.turnText.setText("Your turn: pick a square (or an occupied one to swap), then press a letter key to place it.");
   }
   this.clearSelectionState();
 }
@@ -412,14 +400,10 @@ handlePlayerClick(row, col) {
   if (!cell) return;
   // allow selecting an occupied cell only if swaps remain
   if (cell.filled && (this.swapsUsed >= 3)) {
-    this.setTurnMessage("All swaps used. Pick an empty square for your letter.");
+    this.turnText.setText("All swaps used. Pick an empty square for your letter.");
     return;
   }
   this.highlightSelectedCell(row, col);
-  if (this.isMobile) {
-    this.showMobileKeyboard();
-    window.requestAnimationFrame(() => window.scrollTo(0, 0));
-  }
 }
 
 /**
@@ -470,11 +454,11 @@ async finalizePlayerLetter(cell) {
   this.startCpuTurn();
 }
 
-  /**
-   * Sets up the keyboard listener for this scene.
-   */
-  setupKeyboardInput() {
-    this.input.keyboard.on("keydown", async (e) => {
+/**
+ * Sets up the keyboard listener for this scene.
+ */
+setupKeyboardInput() {
+  this.input.keyboard.on("keydown", async (e) => {
     // Debug: always log keydowns to trace missing events
     console.log('[KEY] keydown', { key: e.key, turnPhase: this.turnPhase, hasSelected: !!this.selectedCell });
     if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) return;
@@ -486,16 +470,23 @@ async finalizePlayerLetter(cell) {
     // Only accept single-letter keys A-Z
     if (/^[a-zA-Z]$/.test(raw)) {
       this.selectedCell.letterText.setText(k);
-      console.log('[KEY] letter typed – auto-finalizing', { k });
-      try {
-        this.turnPhase = "BUSY";
-        const cellToFinalize = this.selectedCell;
-        await this.finalizePlayerLetter(cellToFinalize);
-        this.clearSelectionState();
-      } catch (err) {
-        console.error('Error auto-finalizing letter:', err);
+      // On desktop, auto-finalize for convenience; on mobile, require Enter
+      if (!this.isMobile) {
+        console.log('[KEY] letter typed — auto-finalizing', { k });
+        try {
+          this.turnPhase = "BUSY";
+          const cellToFinalize = this.selectedCell;
+          await this.finalizePlayerLetter(cellToFinalize);
+          this.clearSelectionState();
+        } catch (err) {
+          console.error('Error auto-finalizing letter:', err);
+        }
+        return;
+      } else {
+        // On mobile, let the user press Enter to confirm
+        console.log('[KEY] letter typed (mobile) — waiting for Enter', { k });
+        return;
       }
-      return;
     }
 
     if (k === "ENTER" && this.selectedCell?.letterText.text) {
@@ -513,102 +504,10 @@ async finalizePlayerLetter(cell) {
   });
 }
 
-  /**
-   * Builds a lightweight on-screen keyboard for mobile users.
-   */
-  createMobileKeyboard() {
-    if (!this.isMobile || this.mobileKeyboard) return;
-
-    const container = document.createElement('div');
-    container.id = 'mobile-letter-keyboard';
-    container.style.position = 'fixed';
-    container.style.left = '50%';
-    container.style.bottom = '12px';
-    container.style.transform = 'translateX(-50%)';
-    container.style.display = 'none';
-    container.style.flexDirection = 'column';
-    container.style.alignItems = 'center';
-    container.style.gap = '8px';
-    container.style.padding = '12px 16px 16px';
-    container.style.borderRadius = '18px';
-    container.style.background = 'rgba(12, 12, 12, 0.96)';
-    container.style.boxShadow = '0 10px 32px rgba(0,0,0,0.6)';
-    container.style.backdropFilter = 'blur(4px)';
-    container.style.zIndex = '2000';
-    container.style.userSelect = 'none';
-
-    const rows = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
-    rows.forEach((row, idx) => {
-      const rowDiv = document.createElement('div');
-      rowDiv.style.display = 'flex';
-      rowDiv.style.justifyContent = 'center';
-      rowDiv.style.gap = '6px';
-      if (idx === 2) rowDiv.style.paddingLeft = '22px';
-
-      row.split('').forEach((letter) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = letter;
-        btn.style.width = '38px';
-        btn.style.height = '48px';
-        btn.style.borderRadius = '10px';
-        btn.style.border = '1px solid rgba(255,255,255,0.12)';
-        btn.style.background = 'linear-gradient(180deg, #2f2f2f, #1a1a1a)';
-        btn.style.color = '#f5f5f5';
-        btn.style.fontSize = '18px';
-        btn.style.fontFamily = 'Arial Black, Verdana, sans-serif';
-        btn.style.fontWeight = '600';
-        btn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.45)';
-        btn.style.padding = '0';
-        btn.style.touchAction = 'manipulation';
-        btn.addEventListener('click', () => this.handleMobileLetter(letter));
-        rowDiv.appendChild(btn);
-      });
-
-      container.appendChild(rowDiv);
-    });
-
-    document.body.appendChild(container);
-    this.mobileKeyboard = container;
-
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyMobileKeyboard());
-    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroyMobileKeyboard());
-  }
-
-  showMobileKeyboard() {
-    if (!this.isMobile || !this.mobileKeyboard) return;
-    this.mobileKeyboard.style.display = 'flex';
-  }
-
-  hideMobileKeyboard() {
-    if (!this.isMobile || !this.mobileKeyboard) return;
-    this.mobileKeyboard.style.display = 'none';
-  }
-
-  async handleMobileLetter(letter) {
-    if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) return;
-    this.selectedCell.letterText.setText(letter);
-    this.hideMobileKeyboard();
-    try {
-      this.turnPhase = "BUSY";
-      const cellToFinalize = this.selectedCell;
-      await this.finalizePlayerLetter(cellToFinalize);
-      this.clearSelectionState();
-    } catch (err) {
-      console.error('Error finalizing mobile letter:', err);
-    }
-  }
-
-  destroyMobileKeyboard() {
-    if (!this.mobileKeyboard) return;
-    this.mobileKeyboard.remove();
-    this.mobileKeyboard = null;
-  }
-
-  /**
-   * Finds a random empty cell on the grid.
-   */
-  findRandomEmptyCell() {
+/**
+ * Finds a random empty cell on the grid.
+ */
+findRandomEmptyCell() {
   const empties = [];
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
@@ -636,7 +535,7 @@ finishRound() {
   this.turnPhase = "BUSY";
   this.updateNextLetterUI(false);
   this.clearSelectionState();
-  this.setTurnMessage("Board complete! Final score coming up...");
+  this.turnText.setText("Board complete! Final score coming up...");
 
   const summaryWords = this.collectSummaryWords();
   const boardSnapshot = this.captureBoardSnapshot();
@@ -826,7 +725,7 @@ finishRound() {
     return this.grid.map((row) =>
       row.map((cell) => ({
         pattern: cell.patternCode || 'none',
-        letter: cell.letterText?.text || ''
+        letter: (cell.letterText?.text || '').toUpperCase()
       }))
     );
   }
@@ -873,54 +772,35 @@ finishRound() {
   // ===============   UI & LETTER PICKERS  ==============
   // ======================================================
 
-  updateNextLetterUI(visible = true) {
-    if (!this.nextLetterText) return;
-    this.nextLetterText.setText(visible ? this.currentLetter : "");
-  }
+  updateNextLetterUI(visible = true) {
+    if (!this.nextLetterText) return;
+    this.nextLetterText.setText(visible ? this.currentLetter : "");
+  }
 
-  setTurnMessage(message) {
-    if (!this.turnText) return;
-    this.turnText.setText(message || "");
-    this.layoutTurnText();
-  }
-
-  layoutTurnText() {
-    if (!this.turnText || !this.turnTextBounds) return;
-    const { minTop, preferredTop, maxBottom } = this.turnTextBounds;
-    const height = this.turnText.height || 0;
-    let top = Math.max(minTop, preferredTop);
-    if (top + height > maxBottom) {
-      top = Math.max(minTop, maxBottom - height);
-    }
-    this.turnText.setY(top);
-  }
-
-  /**
-   * Clears only the selection *state* (highlight and variable).
-   * Does NOT clear temporary text.
-   */
-  clearSelectionState() {
-    if (this.selectedCell) {
-      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
-      this.selectedCell = null;
-    }
-    if (this.isMobile) this.hideMobileKeyboard();
-  }
+  /**
+   * Clears only the selection *state* (highlight and variable).
+   * Does NOT clear temporary text.
+   */
+  clearSelectionState() {
+    if (this.selectedCell) {
+      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
+      this.selectedCell = null;
+    }
+  }
 
   /**
    * Cancels a selection (on ESCAPE).
    * This DOES clear temporary text.
    */
-  cancelSelection() {
-    if (this.selectedCell) {
-      if (!this.selectedCell.filled) {
-        this.selectedCell.letterText.setText('');
-      }
-      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
-      this.selectedCell = null;
-    }
-    if (this.isMobile) this.hideMobileKeyboard();
-  }
+  cancelSelection() {
+    if (this.selectedCell) {
+      if (!this.selectedCell.filled) {
+        this.selectedCell.letterText.setText('');
+      }
+      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
+      this.selectedCell = null;
+    }
+  }
 
   /**
    * Highlights a new cell and cleans up the previous one.
@@ -998,214 +878,46 @@ class SummaryScene extends Phaser.Scene {
   constructor() { super('SummaryScene'); }
 
   async create(data) {
-    const { words = [], total = 0, boardSnapshot = [] } = data;
+    const { words = [], total = 0, boardSnapshot = [], skipAutoPrompt = false } = data;
+    const summaryPayload = { words, total, boardSnapshot };
+    const summaryReturnPayload = { ...summaryPayload, skipAutoPrompt: true };
+    if (typeof window !== 'undefined') {
+      window.__lastSummaryData = summaryReturnPayload;
+    }
+    this.finalScore = total;
+    this.summaryToast = null;
+    this.summaryToastTween = null;
+
     const { width, height } = this.sys.game.scale.gameSize;
     const centerX = width / 2;
     const centerY = height / 2;
+    const cardWidth = Math.min(520, width * 0.9);
+    const cardHeight = Math.min(620, height * 0.85);
 
-    const cardWidth = Math.min(520, width * 0.9);
-    const cardHeight = Math.min(620, height * 0.85);
+    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.55).setDepth(0);
+    const card = this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0x1a1a1a)
+      .setStrokeStyle(3, 0x555555)
+      .setOrigin(0.5)
+      .setDepth(0);
+    this.tweens.add({ targets: card, alpha: 1, duration: 250 });
 
-    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.55).setDepth(0);
-    const card = this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0x1a1a1a)
-      .setStrokeStyle(3, 0x555555)
-      .setOrigin(0.5)
-      .setDepth(0);
-    this.tweens.add({ targets: card, alpha: 1, duration: 250 });
+    this.add.text(centerX, centerY - cardHeight / 2 + 50, 'Game Over', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '32px',
+      color: LIGHT_TEXT
+    }).setOrigin(0.5).setDepth(1);
 
-    this.add.text(centerX, centerY - cardHeight / 2 + 50, 'Game Over', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '32px',
-      color: LIGHT_TEXT
-    }).setOrigin(0.5).setDepth(1);
-
-    this.add.text(centerX, centerY - cardHeight / 2 + 100, `Total Score: ${total}`, {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '22px',
-      color: '#f0f0f0'
-    }).setOrigin(0.5).setDepth(1);
+    this.add.text(centerX, centerY - cardHeight / 2 + 100, `Total Score: ${total}`, {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '22px',
+      color: '#f0f0f0'
+    }).setOrigin(0.5).setDepth(1);
 
     const boardTopY = centerY - cardHeight / 2 + 140;
-    const hasBoard = Array.isArray(boardSnapshot) && boardSnapshot.length && Array.isArray(boardSnapshot[0]);
-    if (hasBoard) {
-      this.add.text(centerX, boardTopY - 20, 'Final Board', {
-        fontFamily: 'Arial Black, Verdana, sans-serif',
-        fontSize: '18px',
-        color: '#cccccc'
-      }).setOrigin(0.5).setDepth(1);
-    }
-
-    const renderBoardPreview = () => {
-      if (!hasBoard) return boardTopY;
-      const rows = boardSnapshot.length;
-      const cols = boardSnapshot[0]?.length || 0;
-      if (!cols) return boardTopY;
-
-      const availableWidth = Math.max(140, cardWidth - 200);
-      const availableHeight = Math.max(120, cardHeight * 0.22);
-      const cellSize = Math.min(18, availableWidth / cols, availableHeight / rows);
-      const boardWidth = cols * cellSize;
-      const boardHeight = rows * cellSize;
-      const startX = centerX - boardWidth / 2;
-      const startY = boardTopY;
-
-      const colorForPattern = (pattern) => {
-        if (pattern === 'row') return COLOR_ROW;
-        if (pattern === 'col') return COLOR_COL;
-        if (pattern === 'both') return COLOR_BOTH;
-        return 0x2b2b2b;
-      };
-
-      boardSnapshot.forEach((row, rIdx) => {
-        row.forEach((cell, cIdx) => {
-          const pattern = this.getCellPattern(cell);
-          const color = colorForPattern(pattern);
-          const alpha = pattern === 'none' ? 0.18 : 1;
-          this.add.rectangle(
-            startX + cIdx * cellSize + cellSize / 2,
-            startY + rIdx * cellSize + cellSize / 2,
-            cellSize - 4,
-            cellSize - 4,
-            color,
-            alpha
-          ).setOrigin(0.5).setDepth(1).setStrokeStyle(1, 0x555555, 0.6);
-      });
-      });
-
-      const hitArea = this.add.rectangle(
-        centerX,
-        startY + boardHeight / 2,
-        boardWidth + 32,
-        boardHeight + 32,
-        0xffffff,
-        0
-      ).setOrigin(0.5).setDepth(2).setInteractive({ useHandCursor: true });
-      hitArea.on('pointerdown', () => this.showBoardOverlay(boardSnapshot));
-
-      this.add.text(centerX, startY + boardHeight + 12, 'Tap board to enlarge', {
-        fontSize: '12px',
-        color: '#bbbbbb',
-        fontFamily: 'Verdana, sans-serif'
-      }).setOrigin(0.5).setDepth(1);
-
-      return startY + boardHeight + 24;
-    };
-
-    const boardBottom = renderBoardPreview();
-
-    const sortedWords = [...words].sort((a, b) => b.score - a.score);
-
-    const headerY = boardBottom + 30;
-    this.add.text(centerX - cardWidth / 2 + 40, headerY, 'Word', { fontSize: '16px', color: '#bcbcbc' }).setDepth(1);
-    this.add.text(centerX + cardWidth / 2 - 40, headerY, 'Pts', { fontSize: '16px', color: '#bcbcbc' })
-      .setOrigin(1, 0).setDepth(1);
-
-    let y = headerY + 25;
-    sortedWords.forEach(w => {
-      this.add.text(centerX - cardWidth / 2 + 40, y, w.word, { fontSize: '16px', color: LIGHT_TEXT }).setDepth(1);
-      this.add.text(centerX + cardWidth / 2 - 40, y, w.score.toString(), { fontSize: '16px', color: LIGHT_TEXT })
-        .setOrigin(1, 0).setDepth(1);
-      y += 26;
-    });
-
-    const buttonHeight = 44;
-    const buttonGap = 12;
-    const buttonConfigs = [
-      { label: 'Leaderboard', action: () => this.scene.start('LeaderboardScene') },
-      { label: 'Submit Score', action: () => this.scene.start('NameEntryScene', { total, words }) },
-      { label: 'New Game', action: () => this.scene.start('MainScene') }
-    ];
-    const isNarrow = width < 520;
-    const makeBtn = (label, offsetX, y, btnWidth, onClick) => {
-      const btn = this.add.rectangle(centerX + offsetX, y, btnWidth, buttonHeight, 0x2a2a2a)
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true })
-        .setDepth(1);
-      this.add.text(centerX + offsetX, y, label, {
-        fontFamily: 'Arial Black, Verdana, sans-serif',
-        fontSize: '18px',
-        color: LIGHT_TEXT
-      }).setOrigin(0.5).setDepth(1);
-      btn.on('pointerover', () => btn.setFillStyle(0x444444));
-      btn.on('pointerout',  () => btn.setFillStyle(0x2a2a2a));
-      btn.on('pointerdown', onClick);
-    };
-
-    if (isNarrow) {
-      const usableWidth = Math.max(Math.min(cardWidth - 60, 280), 180);
-      const totalStackHeight = buttonConfigs.length * buttonHeight + (buttonConfigs.length - 1) * buttonGap;
-      const bottomMargin = 24;
-      const blockBottom = centerY + cardHeight / 2 - bottomMargin;
-      const startY = blockBottom - totalStackHeight + buttonHeight / 2;
-      buttonConfigs.forEach((cfg, idx) => {
-        const yPos = startY + idx * (buttonHeight + buttonGap);
-        makeBtn(cfg.label, 0, yPos, usableWidth, cfg.action);
-      });
-    } else {
-      const buttonY = centerY + cardHeight / 2 - 60;
-      const offsets = [-180, 0, 180];
-      const btnWidth = 160;
-      buttonConfigs.forEach((cfg, idx) => {
-        makeBtn(cfg.label, offsets[idx], buttonY, btnWidth, cfg.action);
-      });
-    }
-
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.hideBoardOverlay());
-  }
-
-  getCellPattern(cell) {
-    if (cell && typeof cell === 'object') return cell.pattern || 'none';
-    return cell || 'none';
-  }
-
-  getCellLetter(cell) {
-    if (cell && typeof cell === 'object') return cell.letter || '';
-    return '';
-  }
-
-  showBoardOverlay(boardSnapshot = []) {
-    if (!boardSnapshot?.length || !boardSnapshot[0]?.length) return;
-    this.hideBoardOverlay();
-
-    const { width, height } = this.sys.game.scale.gameSize;
-    const overlay = this.add.container(0, 0).setDepth(40);
-    this.boardOverlay = overlay;
-
-    const scrim = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.78)
-      .setInteractive()
-      .on('pointerdown', () => this.hideBoardOverlay());
-    overlay.add(scrim);
-
-    const cardWidth = Math.min(640, width * 0.92);
-    const cardHeight = Math.min(720, height * 0.9);
-    const card = this.add.rectangle(width / 2, height / 2, cardWidth, cardHeight, 0x161616, 0.98)
-      .setStrokeStyle(2, 0x555555);
-    overlay.add(card);
-
-    const title = this.add.text(width / 2, card.y - cardHeight / 2 + 30, 'Final Board', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '26px',
-      color: LIGHT_TEXT
-    }).setOrigin(0.5);
-    overlay.add(title);
-
-    const subtitle = this.add.text(width / 2, title.y + 24, 'Tap "Show Letters" to toggle view', {
-      fontFamily: 'Verdana, sans-serif',
-      fontSize: '12px',
-      color: '#bbbbbb'
-    }).setOrigin(0.5);
-    overlay.add(subtitle);
-
-    const rows = boardSnapshot.length;
-    const cols = boardSnapshot[0].length;
-    const boardHolder = this.add.container(0, 0);
-    overlay.add(boardHolder);
-
-    const boardAreaHeight = cardHeight - 220;
-    const boardAreaWidth = cardWidth - 100;
-    const cellSize = Math.min(56, boardAreaWidth / cols, boardAreaHeight / rows);
-    const startX = width / 2 - (cols * cellSize) / 2;
-    const startY = subtitle.y + 30;
+    const hasBoard = Array.isArray(boardSnapshot) && boardSnapshot.length && boardSnapshot[0]?.length;
+    const boardHolder = this.add.container(0, 0).setDepth(1);
+    let showLetters = false;
+    let boardBottom = boardTopY;
 
     const colorForPattern = (pattern) => {
       if (pattern === 'row') return COLOR_ROW;
@@ -1214,141 +926,200 @@ class SummaryScene extends Phaser.Scene {
       return 0x2b2b2b;
     };
 
-    let showLetters = false;
-    const redrawBoard = () => {
-      boardHolder.removeAll(true);
-      boardSnapshot.forEach((row, rIdx) => {
-        row.forEach((cell, cIdx) => {
-          const pattern = this.getCellPattern(cell);
-          const color = colorForPattern(pattern);
-          const alpha = pattern === 'none' ? 0.2 : 1;
-          const rect = this.add.rectangle(
-            startX + cIdx * cellSize + cellSize / 2,
-            startY + rIdx * cellSize + cellSize / 2,
-            cellSize - 6,
-            cellSize - 6,
-            color,
-            alpha
-          ).setOrigin(0.5).setStrokeStyle(1.5, 0x555555, 0.7);
-          boardHolder.add(rect);
+    if (hasBoard) {
+      this.add.text(centerX, boardTopY - 20, 'Final Board', {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: '18px',
+        color: '#cccccc'
+      }).setOrigin(0.5).setDepth(1);
 
-          if (showLetters) {
-            const letter = (this.getCellLetter(cell) || '').toUpperCase();
-            if (letter) {
-              const letterText = this.add.text(
-                rect.x,
-                rect.y,
-                letter,
-                {
+      const rows = boardSnapshot.length;
+      const cols = boardSnapshot[0].length;
+      const availableWidth = Math.max(160, cardWidth - 140);
+      const availableHeight = Math.max(200, cardHeight * 0.45);
+      const cellSize = Math.min(42, availableWidth / cols, availableHeight / rows);
+      const boardWidth = cols * cellSize;
+      const boardHeight = rows * cellSize;
+      const startX = centerX - boardWidth / 2;
+      const startY = boardTopY;
+      boardBottom = startY + boardHeight;
+
+      const redrawBoard = () => {
+        boardHolder.removeAll(true);
+        boardSnapshot.forEach((row, rIdx) => {
+          row.forEach((cell, cIdx) => {
+            const pattern = this.getCellPattern(cell);
+            const color = colorForPattern(pattern);
+            const alpha = pattern === 'none' ? 0.18 : 1;
+            const rect = this.add.rectangle(
+              startX + cIdx * cellSize + cellSize / 2,
+              startY + rIdx * cellSize + cellSize / 2,
+              cellSize - 4,
+              cellSize - 4,
+              color,
+              alpha
+            ).setOrigin(0.5).setDepth(1).setStrokeStyle(1, 0x555555, 0.6);
+            boardHolder.add(rect);
+
+            if (showLetters) {
+              const letter = this.getCellLetter(cell);
+              if (letter) {
+                const letterText = this.add.text(rect.x, rect.y, letter, {
                   fontFamily: 'Arial Black, Verdana, sans-serif',
-                  fontSize: `${Math.max(16, cellSize / 2)}px`,
-                  color: '#f3f3f3'
-                }
-              ).setOrigin(0.5);
-              boardHolder.add(letterText);
+                  fontSize: `${Math.max(18, cellSize / 2)}px`,
+                  color: '#f2f2f2'
+                }).setOrigin(0.5).setDepth(2);
+                boardHolder.add(letterText);
+              }
             }
-          }
+          });
         });
-      });
-    };
+      };
 
-    redrawBoard();
+      redrawBoard();
 
-    const buttonHeight = 44;
+      const boardActionHeight = 32;
+      const boardActionWidth = Math.min(cardWidth - 200, 190);
+      const boardActionGap = 10;
+      const stackActions = width < 520;
+      const actionsBaseY = boardBottom + 40;
+      const makeBoardButton = (label, offsetX, y, btnWidth, handler) => {
+        const btn = this.add.rectangle(centerX + offsetX, y, btnWidth, boardActionHeight, 0x242424)
+          .setOrigin(0.5)
+          .setDepth(1)
+          .setInteractive({ useHandCursor: true });
+        const text = this.add.text(centerX + offsetX, y, typeof label === 'function' ? label() : label, {
+          fontFamily: 'Arial Black, Verdana, sans-serif',
+          fontSize: '14px',
+          color: LIGHT_TEXT
+        }).setOrigin(0.5).setDepth(1);
+        text.setInteractive({ useHandCursor: true });
+        const invoke = () => handler();
+        btn.on('pointerover', () => btn.setFillStyle(0x353535));
+        btn.on('pointerout', () => btn.setFillStyle(0x242424));
+        btn.on('pointerdown', invoke);
+        text.on('pointerdown', invoke);
+        return {
+          updateLabel: () => {
+            if (typeof label === 'function') text.setText(label());
+          }
+        };
+      };
+
+      if (stackActions) {
+        const toggleBtn = makeBoardButton(
+          () => (showLetters ? 'Show Colors' : 'Show Letters'),
+          0,
+          actionsBaseY,
+          boardActionWidth,
+          () => {
+            showLetters = !showLetters;
+            redrawBoard();
+            toggleBtn.updateLabel();
+          }
+        );
+        const copyY = actionsBaseY + boardActionHeight + boardActionGap;
+        makeBoardButton(
+          'Copy Colors',
+          0,
+          copyY,
+          boardActionWidth,
+          () => this.copyBoardColorsToClipboard(boardSnapshot, this.finalScore)
+        );
+        this.summaryToast = this.add.text(centerX, copyY + boardActionHeight + 20, '', {
+          fontFamily: 'Verdana, sans-serif',
+          fontSize: '14px',
+          color: '#d5d5d5'
+        }).setOrigin(0.5).setDepth(1).setAlpha(0);
+      } else {
+        const offset = boardActionWidth / 2 + 20;
+        const toggleBtn = makeBoardButton(
+          () => (showLetters ? 'Show Colors' : 'Show Letters'),
+          -offset,
+          actionsBaseY,
+          boardActionWidth,
+          () => {
+            showLetters = !showLetters;
+            redrawBoard();
+            toggleBtn.updateLabel();
+          }
+        );
+        makeBoardButton(
+          'Copy Colors',
+          offset,
+          actionsBaseY,
+          boardActionWidth,
+          () => this.copyBoardColorsToClipboard(boardSnapshot, this.finalScore)
+        );
+        this.summaryToast = this.add.text(centerX, actionsBaseY + boardActionHeight + 16, '', {
+          fontFamily: 'Verdana, sans-serif',
+          fontSize: '14px',
+          color: '#d5d5d5'
+        }).setOrigin(0.5).setDepth(1).setAlpha(0);
+      }
+    } else {
+      this.add.text(centerX, boardTopY, 'No board data available', {
+        fontFamily: 'Verdana, sans-serif',
+        fontSize: '14px',
+        color: '#b5b5b5'
+      }).setOrigin(0.5).setDepth(1);
+      this.summaryToast = this.add.text(centerX, boardTopY + 40, '', {
+        fontFamily: 'Verdana, sans-serif',
+        fontSize: '14px',
+        color: '#d5d5d5'
+      }).setOrigin(0.5).setDepth(1).setAlpha(0);
+    }
+
+    const buttonConfigs = [
+      { label: 'Leaderboard', action: () => this.scene.start('LeaderboardScene', { summaryData: summaryReturnPayload }) },
+      { label: 'New Game', action: () => this.scene.start('MainScene') }
+    ];
+    const buttonHeight = 40;
     const buttonGap = 12;
-    const buttonAreaBottom = card.y + cardHeight / 2 - 24;
+    const btnWidth = Math.max(Math.min(cardWidth - 120, 260), 200);
+    const blockBottom = centerY + cardHeight / 2 - 30;
+    const totalStackHeight = buttonConfigs.length * buttonHeight + (buttonConfigs.length - 1) * buttonGap;
+    const startY = blockBottom - totalStackHeight + buttonHeight / 2;
 
-    const addButton = (label, x, y, widthPx, handler) => {
-      const btn = this.add.rectangle(x, y, widthPx, buttonHeight, 0x2a2a2a)
+    const createButton = (label, y, handler) => {
+      this.add.rectangle(centerX, y + 5, btnWidth + 8, buttonHeight + 8, 0x000000, 0.25).setOrigin(0.5);
+      const btn = this.add.rectangle(centerX, y, btnWidth, buttonHeight, 0x272727)
+        .setStrokeStyle(2, 0x4b4b4b)
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
-      const text = this.add.text(x, y, typeof label === 'function' ? label() : label, {
+      const text = this.add.text(centerX, y, label, {
         fontFamily: 'Arial Black, Verdana, sans-serif',
         fontSize: '16px',
-        color: LIGHT_TEXT
+        color: '#f3f3f3'
       }).setOrigin(0.5);
-      text.setInteractive({ useHandCursor: true });
 
-      const invokeHandler = (event) => {
-        event?.stopPropagation?.();
-        handler();
-      };
-
-      btn.on('pointerover', () => btn.setFillStyle(0x444444));
-      btn.on('pointerout', () => btn.setFillStyle(0x2a2a2a));
-      btn.on('pointerdown', invokeHandler);
-      text.on('pointerdown', invokeHandler);
-
-      overlay.add(btn);
-      overlay.add(text);
-
-      return {
-        updateLabel: () => {
-          if (typeof label === 'function') text.setText(label());
-        }
-      };
+      btn.on('pointerover', () => btn.setFillStyle(0x363636));
+      btn.on('pointerout', () => btn.setFillStyle(0x272727));
+      const invoke = () => handler();
+      btn.on('pointerdown', invoke);
+      text.setInteractive({ useHandCursor: true }).on('pointerdown', invoke);
     };
 
-    const isNarrow = cardWidth < 520;
-    const usableWidth = isNarrow ? Math.min(cardWidth - 70, 320) : 170;
-    const stackHeight = buttonHeight * 3 + buttonGap * 2;
-    const buttonYStart = buttonAreaBottom - stackHeight + buttonHeight / 2;
+    buttonConfigs.forEach((cfg, idx) => {
+      const y = startY + idx * (buttonHeight + buttonGap);
+      createButton(cfg.label, y, cfg.action);
+    });
 
-    const toggleBtn = addButton(
-      () => (showLetters ? 'Show Colors' : 'Show Letters'),
-      width / 2,
-      isNarrow ? buttonYStart : buttonAreaBottom,
-      usableWidth,
-      () => {
-        showLetters = !showLetters;
-        redrawBoard();
-        toggleBtn.updateLabel();
-      }
-    );
-
-    const copyBtnY = isNarrow ? buttonYStart + buttonHeight + buttonGap : buttonAreaBottom;
-    const closeBtnY = isNarrow ? copyBtnY + buttonHeight + buttonGap : buttonAreaBottom;
-    const horizontalOffset = isNarrow ? 0 : usableWidth + 30;
-
-    addButton(
-      'Copy Colors',
-      isNarrow ? width / 2 : width / 2 - horizontalOffset,
-      copyBtnY,
-      usableWidth,
-      () => this.copyBoardColorsToClipboard(boardSnapshot)
-    );
-
-    addButton(
-      'Close',
-      isNarrow ? width / 2 : width / 2 + horizontalOffset,
-      closeBtnY,
-      usableWidth,
-      () => this.hideBoardOverlay()
-    );
-
-    const toastY = isNarrow ? closeBtnY + buttonHeight + 10 : buttonAreaBottom - buttonHeight - 10;
-    this.overlayToast = this.add.text(width / 2, toastY, '', {
-      fontFamily: 'Verdana, sans-serif',
-      fontSize: '14px',
-      color: '#d5d5d5'
-    }).setOrigin(0.5).setAlpha(0);
-    overlay.add(this.overlayToast);
+    this.maybePromptForHighScore(total, words, boardSnapshot, skipAutoPrompt);
   }
 
-  hideBoardOverlay() {
-    if (this.overlayToastTween) {
-      this.overlayToastTween.remove();
-      this.overlayToastTween = null;
-    }
-    if (this.boardOverlay) {
-      this.boardOverlay.destroy(true);
-      this.boardOverlay = null;
-    }
-    this.overlayToast = null;
+  getCellPattern(cell) {
+    if (cell && typeof cell === 'object') return cell.pattern || 'none';
+    return cell || 'none';
   }
 
-  async copyBoardColorsToClipboard(boardSnapshot) {
-    const shareText = this.buildColorShareString(boardSnapshot);
+  getCellLetter(cell) {
+    if (cell && typeof cell === 'object') return (cell.letter || '').toUpperCase();
+    return '';
+  }
+
+  async copyBoardColorsToClipboard(boardSnapshot, score) {
+    const shareText = this.buildColorShareString(boardSnapshot, score);
     if (!shareText) return;
     try {
       if (navigator.clipboard?.writeText) {
@@ -1364,51 +1135,110 @@ class SummaryScene extends Phaser.Scene {
         document.execCommand('copy');
         document.body.removeChild(textarea);
       }
-      this.showOverlayToast('Board colors copied!');
+      this.showSummaryToast('Pictogram copied with score!');
     } catch (err) {
       console.error('Copy failed:', err);
-      this.showOverlayToast('Unable to copy. See console.');
+      this.showSummaryToast('Unable to copy. See console.');
     }
   }
 
-  buildColorShareString(boardSnapshot = []) {
+  buildColorShareString(boardSnapshot = [], score) {
     if (!boardSnapshot.length) return '';
-    const map = { row: '🟧', col: '🟦', both: '🟩', none: '⬛' };
-    return boardSnapshot
+    const map = { row: '🟨', col: '🟦', both: '🟩', none: '⬛' };
+    const pictogram = boardSnapshot
       .map((row) =>
         row
           .map((cell) => map[this.getCellPattern(cell)] || map.none)
           .join('')
       )
       .join('\n');
+    const numericScore = Number(score);
+    if (Number.isFinite(numericScore)) {
+      return `${pictogram}\n\n**Score: ${numericScore}**`;
+    }
+    return pictogram;
   }
-
-  showOverlayToast(message) {
-    if (!this.overlayToast || !message) return;
-    this.overlayToast.setText(message);
-    this.overlayToast.setAlpha(1);
-    if (this.overlayToastTween) this.overlayToastTween.remove();
-    this.overlayToastTween = this.tweens.add({
-      targets: this.overlayToast,
+  showSummaryToast(message) {
+    if (!this.summaryToast || !message) return;
+    this.summaryToast.setText(message);
+    this.summaryToast.setAlpha(1);
+    if (this.summaryToastTween) this.summaryToastTween.remove();
+    this.summaryToastTween = this.tweens.add({
+      targets: this.summaryToast,
       alpha: 0,
       delay: 1500,
       duration: 600,
       ease: 'Sine.easeOut'
     });
   }
+
+  async maybePromptForHighScore(total, words, boardSnapshot, skipAutoPrompt) {
+    if (skipAutoPrompt || this.highScoreCheckInProgress || !supabase?.from) return;
+    this.highScoreCheckInProgress = true;
+    try {
+      const { data: allTime = [] } = await supabase
+        .from('scores')
+        .select('score')
+        .order('score', { ascending: false })
+        .limit(5);
+
+      const { start, end } = this.getWeeklyWindow();
+      const { data: weekly = [] } = await supabase
+        .from('scores')
+        .select('score')
+        .gte('created_at', start.toISOString())
+        .lt('created_at', end.toISOString())
+        .order('score', { ascending: false })
+        .limit(5);
+
+      const qualifiesAllTime = this.didScoreQualify(total, allTime);
+      const qualifiesWeekly = this.didScoreQualify(total, weekly);
+      if (qualifiesAllTime || qualifiesWeekly) {
+        this.time.delayedCall(600, () => {
+          this.scene.start('NameEntryScene', { words, total, boardSnapshot });
+        });
+      }
+    } catch (error) {
+      console.error('High score check failed:', error);
+    } finally {
+      this.highScoreCheckInProgress = false;
+    }
+  }
+
+  didScoreQualify(total, list = []) {
+    if (!Array.isArray(list)) return false;
+    if (list.length < 5) return total > 0;
+    const threshold = list[list.length - 1]?.score ?? -Infinity;
+    return total >= threshold;
+  }
+
+  getWeeklyWindow() {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+    const end = new Date(monday);
+    end.setDate(end.getDate() + 7);
+    return { start: monday, end };
+  }
 }
 
 // ===================== Leaderboard Scene =====================
 class LeaderboardScene extends Phaser.Scene {
-  constructor() { super('LeaderboardScene'); }
+  constructor() { super('LeaderboardScene'); }
 
-  async create() {
-    const { width, height } = this.sys.game.scale.gameSize;
-    const centerX = width / 2;
-    const centerY = height / 2;
+  async create(data = {}) {
+    const { width, height } = this.sys.game.scale.gameSize;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const summaryData = (data && data.summaryData)
+      ? data.summaryData
+      : (typeof window !== 'undefined' ? window.__lastSummaryData : null);
 
-    const cardWidth  = Math.min(460, width * 0.8);
-    const cardHeight = Math.min(540, height * 0.78);
+    const cardWidth  = Math.min(480, width * 0.82);
+    const cardHeight = Math.min(600, height * 0.84);
 
     this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.55);
     this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0x1a1a1a)
@@ -1487,55 +1317,97 @@ class LeaderboardScene extends Phaser.Scene {
     renderList(allTime, sectionY1);
     renderList(weekly, sectionY2);
 
-    const buttonY = centerY + cardHeight / 2 - 50;
-    const btn = this.add.rectangle(centerX, buttonY, 160, 44, 0x2a2a2a)
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    this.add.text(centerX, buttonY, 'New Game', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '18px',
-      color: LIGHT_TEXT
-    }).setOrigin(0.5);
+    const buttonBaseY = centerY + cardHeight / 2 - 70;
+    const buttonWidth = 190;
+    const buttonHeight = 46;
+    const buttonGap = 16;
+    const stackedButtons = true;
 
-    btn.on('pointerover', () => btn.setFillStyle(0x444444));
-    btn.on('pointerout',  () => btn.setFillStyle(0x2a2a2a));
-    // --- FIX: Removed call to obsolete resetGameState() ---
-    btn.on('pointerdown', () => { this.scene.start('MainScene'); });
-  }
+    const buttonConfigs = [
+      {
+        label: 'Back to Summary',
+        enabled: !!summaryData,
+        action: () => summaryData && this.scene.start('SummaryScene', summaryData)
+      },
+      {
+        label: 'New Game',
+        enabled: true,
+        action: () => this.scene.start('MainScene')
+      }
+    ];
+
+    const createCardButton = (cfg, x, y) => {
+      this.add.rectangle(x, y + 6, buttonWidth + 12, buttonHeight + 8, 0x000000, 0.35)
+        .setOrigin(0.5);
+      const btn = this.add.rectangle(x, y, buttonWidth, buttonHeight, cfg.enabled ? 0x272727 : 0x1a1a1a)
+        .setStrokeStyle(2, cfg.enabled ? 0x515151 : 0x2a2a2a)
+        .setOrigin(0.5);
+      const label = this.add.text(x, y, cfg.label, {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: '18px',
+        color: cfg.enabled ? '#f5f5f5' : '#7a7a7a'
+      }).setOrigin(0.5);
+
+      if (cfg.enabled) {
+        btn.setInteractive({ useHandCursor: true });
+        label.setInteractive({ useHandCursor: true });
+        const handler = () => cfg.action();
+        btn.on('pointerover', () => btn.setFillStyle(0x353535));
+        btn.on('pointerout', () => btn.setFillStyle(0x272727));
+        btn.on('pointerdown', handler);
+        label.on('pointerdown', handler);
+      }
+    };
+
+    if (stackedButtons) {
+      const totalHeight = buttonConfigs.length * buttonHeight + (buttonConfigs.length - 1) * buttonGap;
+      const startY = buttonBaseY - totalHeight / 2 + buttonHeight / 2;
+      buttonConfigs.forEach((cfg, idx) => {
+        const y = startY + idx * (buttonHeight + buttonGap);
+        createCardButton(cfg, centerX, y);
+      });
+    } else {
+      const spacing = 200;
+      buttonConfigs.forEach((cfg, idx) => {
+        const offset = (idx - (buttonConfigs.length - 1) / 2) * spacing;
+        createCardButton(cfg, centerX + offset, buttonBaseY);
+      });
+    }
+  }
 }
 
 
 // ===================== Name Entry Scene =====================
 class NameEntryScene extends Phaser.Scene {
-  constructor() { super('NameEntryScene'); }
+  constructor() { super('NameEntryScene'); }
 
-  create(data) {
-    const { total, words } = data;
-    const { width, height } = this.sys.game.scale.gameSize;
-    const centerX = width / 2;
-    const centerY = height / 2;
+  create(data) {
+    const { total, words, boardSnapshot = [] } = data;
+    const { width, height } = this.sys.game.scale.gameSize;
+    const centerX = width / 2;
+    const centerY = height / 2;
 
-    const cardWidth = Math.min(460, width * 0.8);
-    const cardHeight = Math.min(260, height * 0.45);
+    const cardWidth = Math.min(500, width * 0.85);
+    const cardHeight = Math.min(300, height * 0.52);
 
-    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.55);
-    this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0x1b1b1b)
-      .setStrokeStyle(3, 0x555555)
-      .setOrigin(0.5);
+    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.55);
+    this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0x1b1b1b)
+      .setStrokeStyle(3, 0x555555)
+      .setOrigin(0.5);
 
-    this.add.text(centerX, centerY - 70, 'New High Score!', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '26px',
-      color: LIGHT_TEXT
-    }).setOrigin(0.5);
+    this.add.text(centerX, centerY - 70, 'New High Score!', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '26px',
+      color: LIGHT_TEXT
+    }).setOrigin(0.5);
 
-    this.add.text(centerX, centerY - 30, `Your Score: ${total}`, {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '20px',
-      color: '#e8e8e8'
-    }).setOrigin(0.5);
+    this.add.text(centerX, centerY - 30, `Your Score: ${total}`, {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '20px',
+      color: '#e8e8e8'
+    }).setOrigin(0.5);
 
-    const inputWidth = Math.min(240, cardWidth - 80);
+    const inputWidth = Math.min(280, cardWidth - 100);
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = 'Enter your name';
@@ -1576,18 +1448,18 @@ class NameEntryScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupInput);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanupInput);
 
-    const btnY = centerY + 60;
-    const btn = this.add.rectangle(centerX, btnY, 140, 40, 0x2a2a2a)
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    this.add.text(centerX, btnY, 'Submit', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '18px',
-      color: LIGHT_TEXT
-    }).setOrigin(0.5);
+    const btnY = centerY + 60;
+    const btn = this.add.rectangle(centerX, btnY, 140, 40, 0x2a2a2a)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    this.add.text(centerX, btnY, 'Submit', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '18px',
+      color: LIGHT_TEXT
+    }).setOrigin(0.5);
 
-    btn.on('pointerover', () => btn.setFillStyle(0x444444));
-    btn.on('pointerout',  () => btn.setFillStyle(0x2a2a2a));
+    btn.on('pointerover', () => btn.setFillStyle(0x444444));
+    btn.on('pointerout',  () => btn.setFillStyle(0x2a2a2a));
 
     btn.on('pointerdown', async () => {
       const playerName = input.value.trim() || 'Anonymous';
@@ -1596,21 +1468,19 @@ class NameEntryScene extends Phaser.Scene {
       try {
         const { data, error } = await supabase
           .from('scores')
-          .insert([{ name: playerName, score: total }])
-          .select();
-        if (error) throw error;
-        console.log('✅ Score inserted:', data);
-      } catch (error) {
-        console.error('Supabase insert error:', error);
-        alert('⚠️ Unable to save score — check console for details.');
-      }
+          .insert([{ name: playerName, score: total }])
+          .select();
+        if (error) throw error;
+        console.log('Score inserted:', data);
+      } catch (error) {
+        console.error('Supabase insert error:', error);
+        alert('Unable to save score - check console for details.');
+      }
 
-      this.scene.start('SummaryScene', { words, total });
-    });
-
-  }
+      this.scene.start('SummaryScene', { words, total, boardSnapshot, skipAutoPrompt: true });
+    });
+  }
 }
-
 // ===================== Launch / Reset / Boot =====================
 
 // --- NOTE: All global state functions are GONE. ---
