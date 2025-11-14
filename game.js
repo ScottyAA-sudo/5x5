@@ -334,6 +334,7 @@ async placeLetter(row, col) {
   }
 }
 
+}
 /**
  * CPU prepares its next letter and waits for the player to place it.
  */
@@ -825,7 +826,10 @@ finishRound() {
 
   captureBoardSnapshot() {
     return this.grid.map((row) =>
-      row.map((cell) => cell.patternCode || 'none')
+      row.map((cell) => ({
+        pattern: cell.patternCode || 'none',
+        letter: cell.letterText?.text || ''
+      }))
     );
   }
 
@@ -1024,21 +1028,22 @@ class SummaryScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(1);
 
     const boardTopY = centerY - cardHeight / 2 + 140;
-    if (boardSnapshot?.length) {
-      this.add.text(centerX, boardTopY - 20, 'Final Board', {
-        fontFamily: 'Arial Black, Verdana, sans-serif',
-        fontSize: '18px',
-        color: '#cccccc'
-      }).setOrigin(0.5).setDepth(1);
+    const hasBoard = Array.isArray(boardSnapshot) && boardSnapshot.length && Array.isArray(boardSnapshot[0]);
+    if (hasBoard) {
+      this.add.text(centerX, boardTopY - 20, 'Final Board', {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: '18px',
+        color: '#cccccc'
+      }).setOrigin(0.5).setDepth(1);
     }
 
     const renderBoardPreview = () => {
-      if (!boardSnapshot || !boardSnapshot.length) return boardTopY;
+      if (!hasBoard) return boardTopY;
       const rows = boardSnapshot.length;
       const cols = boardSnapshot[0]?.length || 0;
       if (!cols) return boardTopY;
 
-      const cellSize = Math.min(26, (cardWidth - 120) / cols);
+      const cellSize = Math.min(22, (cardWidth - 160) / cols, (cardHeight * 0.25) / rows);
       const boardWidth = cols * cellSize;
       const boardHeight = rows * cellSize;
       const startX = centerX - boardWidth / 2;
@@ -1052,13 +1057,14 @@ class SummaryScene extends Phaser.Scene {
       };
 
       boardSnapshot.forEach((row, rIdx) => {
-        row.forEach((pattern, cIdx) => {
-          const color = colorForPattern(pattern);
-          const alpha = pattern === 'none' ? 0.18 : 1;
-          this.add.rectangle(
-            startX + cIdx * cellSize + cellSize / 2,
-            startY + rIdx * cellSize + cellSize / 2,
-            cellSize - 4,
+        row.forEach((cell, cIdx) => {
+          const pattern = this.getCellPattern(cell);
+          const color = colorForPattern(pattern);
+          const alpha = pattern === 'none' ? 0.18 : 1;
+          this.add.rectangle(
+            startX + cIdx * cellSize + cellSize / 2,
+            startY + rIdx * cellSize + cellSize / 2,
+            cellSize - 4,
             cellSize - 4,
             color,
             alpha
@@ -1066,7 +1072,23 @@ class SummaryScene extends Phaser.Scene {
       });
       });
 
-      return startY + boardHeight;
+      const hitArea = this.add.rectangle(
+        centerX,
+        startY + boardHeight / 2,
+        boardWidth + 32,
+        boardHeight + 32,
+        0xffffff,
+        0
+      ).setOrigin(0.5).setDepth(2).setInteractive({ useHandCursor: true });
+      hitArea.on('pointerdown', () => this.showBoardOverlay(boardSnapshot));
+
+      this.add.text(centerX, startY + boardHeight + 12, 'Tap board to enlarge', {
+        fontSize: '12px',
+        color: '#bbbbbb',
+        fontFamily: 'Verdana, sans-serif'
+      }).setOrigin(0.5).setDepth(1);
+
+      return startY + boardHeight + 24;
     };
 
     const boardBottom = renderBoardPreview();
@@ -1127,6 +1149,243 @@ class SummaryScene extends Phaser.Scene {
         makeBtn(cfg.label, offsets[idx], buttonY, btnWidth, cfg.action);
       });
     }
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.hideBoardOverlay());
+  }
+
+  getCellPattern(cell) {
+    if (cell && typeof cell === 'object') return cell.pattern || 'none';
+    return cell || 'none';
+  }
+
+  getCellLetter(cell) {
+    if (cell && typeof cell === 'object') return cell.letter || '';
+    return '';
+  }
+
+  showBoardOverlay(boardSnapshot = []) {
+    if (!boardSnapshot?.length || !boardSnapshot[0]?.length) return;
+    this.hideBoardOverlay();
+
+    const { width, height } = this.sys.game.scale.gameSize;
+    const overlay = this.add.container(0, 0).setDepth(40);
+    this.boardOverlay = overlay;
+
+    const scrim = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.78)
+      .setInteractive()
+      .on('pointerdown', () => this.hideBoardOverlay());
+    overlay.add(scrim);
+
+    const cardWidth = Math.min(640, width * 0.92);
+    const cardHeight = Math.min(720, height * 0.9);
+    const card = this.add.rectangle(width / 2, height / 2, cardWidth, cardHeight, 0x161616, 0.98)
+      .setStrokeStyle(2, 0x555555);
+    overlay.add(card);
+
+    const title = this.add.text(width / 2, card.y - cardHeight / 2 + 30, 'Final Board', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '26px',
+      color: LIGHT_TEXT
+    }).setOrigin(0.5);
+    overlay.add(title);
+
+    const subtitle = this.add.text(width / 2, title.y + 24, 'Tap "Show Letters" to toggle view', {
+      fontFamily: 'Verdana, sans-serif',
+      fontSize: '12px',
+      color: '#bbbbbb'
+    }).setOrigin(0.5);
+    overlay.add(subtitle);
+
+    const rows = boardSnapshot.length;
+    const cols = boardSnapshot[0].length;
+    const boardHolder = this.add.container(0, 0);
+    overlay.add(boardHolder);
+
+    const boardAreaHeight = cardHeight - 220;
+    const boardAreaWidth = cardWidth - 100;
+    const cellSize = Math.min(56, boardAreaWidth / cols, boardAreaHeight / rows);
+    const startX = width / 2 - (cols * cellSize) / 2;
+    const startY = subtitle.y + 30;
+
+    const colorForPattern = (pattern) => {
+      if (pattern === 'row') return COLOR_ROW;
+      if (pattern === 'col') return COLOR_COL;
+      if (pattern === 'both') return COLOR_BOTH;
+      return 0x2b2b2b;
+    };
+
+    let showLetters = false;
+    const redrawBoard = () => {
+      boardHolder.removeAll(true);
+      boardSnapshot.forEach((row, rIdx) => {
+        row.forEach((cell, cIdx) => {
+          const pattern = this.getCellPattern(cell);
+          const color = colorForPattern(pattern);
+          const alpha = pattern === 'none' ? 0.2 : 1;
+          const rect = this.add.rectangle(
+            startX + cIdx * cellSize + cellSize / 2,
+            startY + rIdx * cellSize + cellSize / 2,
+            cellSize - 6,
+            cellSize - 6,
+            color,
+            alpha
+          ).setOrigin(0.5).setStrokeStyle(1.5, 0x555555, 0.7);
+          boardHolder.add(rect);
+
+          if (showLetters) {
+            const letter = (this.getCellLetter(cell) || '').toUpperCase();
+            if (letter) {
+              const letterText = this.add.text(
+                rect.x,
+                rect.y,
+                letter,
+                {
+                  fontFamily: 'Arial Black, Verdana, sans-serif',
+                  fontSize: `${Math.max(16, cellSize / 2)}px`,
+                  color: '#f3f3f3'
+                }
+              ).setOrigin(0.5);
+              boardHolder.add(letterText);
+            }
+          }
+        });
+      });
+    };
+
+    redrawBoard();
+
+    const buttonHeight = 44;
+    const buttonGap = 12;
+    const buttonAreaBottom = card.y + cardHeight / 2 - 24;
+
+    const addButton = (label, x, y, widthPx, handler) => {
+      const btn = this.add.rectangle(x, y, widthPx, buttonHeight, 0x2a2a2a)
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+      const text = this.add.text(x, y, typeof label === 'function' ? label() : label, {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: '16px',
+        color: LIGHT_TEXT
+      }).setOrigin(0.5);
+      btn.on('pointerover', () => btn.setFillStyle(0x444444));
+      btn.on('pointerout', () => btn.setFillStyle(0x2a2a2a));
+      btn.on('pointerdown', handler);
+      overlay.add(btn);
+      overlay.add(text);
+
+      return {
+        updateLabel: () => {
+          if (typeof label === 'function') text.setText(label());
+        }
+      };
+    };
+
+    const isNarrow = cardWidth < 520;
+    const usableWidth = isNarrow ? Math.min(cardWidth - 70, 320) : 170;
+    const stackHeight = buttonHeight * 3 + buttonGap * 2;
+    const buttonYStart = buttonAreaBottom - stackHeight + buttonHeight / 2;
+
+    const toggleBtn = addButton(
+      () => (showLetters ? 'Show Colors' : 'Show Letters'),
+      width / 2,
+      isNarrow ? buttonYStart : buttonAreaBottom,
+      usableWidth,
+      () => {
+        showLetters = !showLetters;
+        redrawBoard();
+        toggleBtn.updateLabel();
+      }
+    );
+
+    const copyBtnY = isNarrow ? buttonYStart + buttonHeight + buttonGap : buttonAreaBottom;
+    const closeBtnY = isNarrow ? copyBtnY + buttonHeight + buttonGap : buttonAreaBottom;
+    const horizontalOffset = isNarrow ? 0 : usableWidth + 30;
+
+    addButton(
+      'Copy Colors',
+      isNarrow ? width / 2 : width / 2 - horizontalOffset,
+      copyBtnY,
+      usableWidth,
+      () => this.copyBoardColorsToClipboard(boardSnapshot)
+    );
+
+    addButton(
+      'Close',
+      isNarrow ? width / 2 : width / 2 + horizontalOffset,
+      closeBtnY,
+      usableWidth,
+      () => this.hideBoardOverlay()
+    );
+
+    const toastY = isNarrow ? closeBtnY + buttonHeight + 10 : buttonAreaBottom - buttonHeight - 10;
+    this.overlayToast = this.add.text(width / 2, toastY, '', {
+      fontFamily: 'Verdana, sans-serif',
+      fontSize: '14px',
+      color: '#d5d5d5'
+    }).setOrigin(0.5).setAlpha(0);
+    overlay.add(this.overlayToast);
+  }
+
+  hideBoardOverlay() {
+    if (this.overlayToastTween) {
+      this.overlayToastTween.remove();
+      this.overlayToastTween = null;
+    }
+    if (this.boardOverlay) {
+      this.boardOverlay.destroy(true);
+      this.boardOverlay = null;
+    }
+    this.overlayToast = null;
+  }
+
+  async copyBoardColorsToClipboard(boardSnapshot) {
+    const shareText = this.buildColorShareString(boardSnapshot);
+    if (!shareText) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareText);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = shareText;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      this.showOverlayToast('Board colors copied!');
+    } catch (err) {
+      console.error('Copy failed:', err);
+      this.showOverlayToast('Unable to copy. See console.');
+    }
+  }
+
+  buildColorShareString(boardSnapshot = []) {
+    if (!boardSnapshot.length) return '';
+    const map = { row: '🟧', col: '🟦', both: '🟩', none: '⬛' };
+    return boardSnapshot
+      .map((row) =>
+        row
+          .map((cell) => map[this.getCellPattern(cell)] || map.none)
+          .join('')
+      )
+      .join('\n');
+  }
+
+  showOverlayToast(message) {
+    if (!this.overlayToast || !message) return;
+    this.overlayToast.setText(message);
+    this.overlayToast.setAlpha(1);
+    if (this.overlayToastTween) this.overlayToastTween.remove();
+    this.overlayToastTween = this.tweens.add({
+      targets: this.overlayToast,
+      alpha: 0,
+      delay: 1500,
+      duration: 600,
+      ease: 'Sine.easeOut'
+    });
   }
 }
 
@@ -1302,7 +1561,7 @@ class NameEntryScene extends Phaser.Scene {
       window.removeEventListener('resize', repositionInput);
       window.removeEventListener('scroll', repositionInput, true);
       if (input.parentNode) {
-        input.parentNode.remove();
+        input.parentNode.removeChild(input);
       }
     };
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupInput);
