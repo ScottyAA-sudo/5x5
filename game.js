@@ -116,7 +116,8 @@ class MainScene extends Phaser.Scene {
     // --- 3. Grid Placement ---
     const GRID_LEFT = (canvasWidth - GRID_SIZE * CELL_SIZE) / 2;
     const GRID_RIGHT = GRID_LEFT + GRID_SIZE * CELL_SIZE;
-    const GRID_TOP = Math.max(60, (canvasHeight - (GRID_SIZE * CELL_SIZE + 300)) / 2);
+    const minGridTop = this.isMobile ? 160 : 110;
+    const GRID_TOP = Math.max(minGridTop, (canvasHeight - (GRID_SIZE * CELL_SIZE + 320)) / 2);
 
     // --- 4. Build Grid ---
     for (let row = 0; row < GRID_SIZE; row++) {
@@ -175,12 +176,18 @@ class MainScene extends Phaser.Scene {
     const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
     const gridPixelWidth = GRID_SIZE * CELL_SIZE;
     const instructionWidth = gridPixelWidth - 24;
-    const instructionBaseline = Math.max(uiY + 90, GRID_TOP - 24);
+    const nextLetterBottom = uiY + 80;
+    const turnMaxBottom = Math.max(GRID_TOP - 16, nextLetterBottom + 20);
+    this.turnTextBounds = {
+      minTop: nextLetterBottom + 6,
+      preferredTop: this.isMobile ? nextLetterBottom + 10 : nextLetterBottom + 18,
+      maxBottom: turnMaxBottom
+    };
     // Removed "On Deck" label; nextLetterBox displays current CPU letter.
     this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
       .setStrokeStyle(3, 0x555555)
       .setOrigin(0.5, 0);
-    this.nextLetterText = this.add.text(gridCenterX, uiY + 40, '', {
+    this.nextLetterText = this.add.text(gridCenterX, uiY + 40, '', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '48px',
       fontStyle: 'bold',
@@ -192,7 +199,7 @@ class MainScene extends Phaser.Scene {
       fontStyle: 'bold',
       color: LIGHT_TEXT
     }).setOrigin(1, 0.5);
-    this.turnText = this.add.text(gridCenterX, instructionBaseline, '', {
+    this.turnText = this.add.text(gridCenterX, this.turnTextBounds.preferredTop, '', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: this.isMobile ? '14px' : '16px',
       fontStyle: 'bold',
@@ -203,7 +210,8 @@ class MainScene extends Phaser.Scene {
         useAdvancedWrap: true
       },
       lineSpacing: 4
-    }).setOrigin(0.5, 1);
+    }).setOrigin(0.5, 0);
+    this.layoutTurnText();
 
     // --- 7. Row & Column Labels ---
     for (let r = 0; r < GRID_SIZE; r++) {
@@ -337,7 +345,7 @@ startCpuTurn() {
   this.currentLetter = this.pickNextLetter();
   this.updateNextLetterUI(true);
   const swapsLeft = Math.max(0, 3 - (this.swapsUsed || 0));
-  this.turnText.setText(`Place this letter in an empty square or replace an occupied square (Swaps left: ${swapsLeft}).`);
+  this.setTurnMessage(`Place this letter in an empty square or replace an occupied square (Swaps left: ${swapsLeft}).`);
   this.clearSelectionState();
 }
 
@@ -350,7 +358,7 @@ async handleCpuPlacement(row, col) {
 
   const replacingExisting = cell.filled;
   if (replacingExisting && this.swapsUsed >= 3) {
-    this.turnText.setText("All swaps used. Pick an empty square for the CPU letter.");
+    this.setTurnMessage("All swaps used. Pick an empty square for the CPU letter.");
     return;
   }
 
@@ -388,9 +396,9 @@ startPlayerTurn() {
   this.currentLetter = ""; // clear CPU letter
   this.updateNextLetterUI(false);
   if (this.isMobile) {
-    this.turnText.setText("Your turn: tap a square (or occupied to swap), then pick a letter below to lock it in.");
+    this.setTurnMessage("Your turn: tap a square (or occupied to swap), then pick a letter below to lock it in.");
   } else {
-    this.turnText.setText("Your turn: pick a square (or occupied to swap), then press a letter key to place it.");
+    this.setTurnMessage("Your turn: pick a square (or occupied to swap), then press a letter key to place it.");
   }
   this.clearSelectionState();
 }
@@ -405,7 +413,7 @@ handlePlayerClick(row, col) {
   if (!cell) return;
   // allow selecting an occupied cell only if swaps remain
   if (cell.filled && (this.swapsUsed >= 3)) {
-    this.turnText.setText("All swaps used. Pick an empty square for your letter.");
+    this.setTurnMessage("All swaps used. Pick an empty square for your letter.");
     return;
   }
   this.highlightSelectedCell(row, col);
@@ -629,7 +637,7 @@ finishRound() {
   this.turnPhase = "BUSY";
   this.updateNextLetterUI(false);
   this.clearSelectionState();
-  this.turnText.setText("Board complete! Final score coming up...");
+  this.setTurnMessage("Board complete! Final score coming up...");
 
   const summaryWords = this.collectSummaryWords();
   const boardSnapshot = this.captureBoardSnapshot();
@@ -863,15 +871,32 @@ finishRound() {
   // ===============   UI & LETTER PICKERS  ==============
   // ======================================================
 
-  updateNextLetterUI(visible = true) {
-    if (!this.nextLetterText) return;
-    this.nextLetterText.setText(visible ? this.currentLetter : "");
-  }
+  updateNextLetterUI(visible = true) {
+    if (!this.nextLetterText) return;
+    this.nextLetterText.setText(visible ? this.currentLetter : "");
+  }
 
-  /**
-   * Clears only the selection *state* (highlight and variable).
-   * Does NOT clear temporary text.
-   */
+  setTurnMessage(message) {
+    if (!this.turnText) return;
+    this.turnText.setText(message || "");
+    this.layoutTurnText();
+  }
+
+  layoutTurnText() {
+    if (!this.turnText || !this.turnTextBounds) return;
+    const { minTop, preferredTop, maxBottom } = this.turnTextBounds;
+    const height = this.turnText.height || 0;
+    let top = Math.max(minTop, preferredTop);
+    if (top + height > maxBottom) {
+      top = Math.max(minTop, maxBottom - height);
+    }
+    this.turnText.setY(top);
+  }
+
+  /**
+   * Clears only the selection *state* (highlight and variable).
+   * Does NOT clear temporary text.
+   */
   clearSelectionState() {
     if (this.selectedCell) {
       this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
