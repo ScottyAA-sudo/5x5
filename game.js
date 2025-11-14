@@ -171,30 +171,39 @@ class MainScene extends Phaser.Scene {
     }
 
     // --- 6. Top UI Row ---
-    const uiY = 10;
-    const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
+    const uiY = 10;
+    const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
+    const gridPixelWidth = GRID_SIZE * CELL_SIZE;
+    const instructionWidth = gridPixelWidth - 24;
+    const instructionBaseline = Math.max(40, GRID_TOP - 16);
     // Removed "On Deck" label; nextLetterBox displays current CPU letter.
-    this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
-      .setStrokeStyle(3, 0x555555)
-      .setOrigin(0.5, 0);
+    this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
+      .setStrokeStyle(3, 0x555555)
+      .setOrigin(0.5, 0);
     this.nextLetterText = this.add.text(gridCenterX, uiY + 40, '', {
       fontFamily: 'Arial Black, Verdana, sans-serif',
       fontSize: '48px',
       fontStyle: 'bold',
       color: '#82c4ff'
     }).setOrigin(0.5);
-    this.scoreText = this.add.text(GRID_RIGHT, uiY + 12, 'Score: 0', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '20px',
-      fontStyle: 'bold',
-      color: LIGHT_TEXT
-    }).setOrigin(1, 0.5);
-    this.turnText = this.add.text(canvasWidth / 2, uiY + 100, '', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '20px',
-      fontStyle: 'bold',
-      color: LIGHT_TEXT
-    }).setOrigin(0.5, 0);
+    this.scoreText = this.add.text(GRID_RIGHT, uiY + 12, 'Score: 0', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '20px',
+      fontStyle: 'bold',
+      color: LIGHT_TEXT
+    }).setOrigin(1, 0.5);
+    this.turnText = this.add.text(gridCenterX, instructionBaseline, '', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: this.isMobile ? '14px' : '16px',
+      fontStyle: 'bold',
+      color: LIGHT_TEXT,
+      align: 'center',
+      wordWrap: {
+        width: instructionWidth,
+        useAdvancedWrap: true
+      },
+      lineSpacing: 4
+    }).setOrigin(0.5, 1);
 
     // --- 7. Row & Column Labels ---
     for (let r = 0; r < GRID_SIZE; r++) {
@@ -286,10 +295,11 @@ class MainScene extends Phaser.Scene {
       drawLegendItem(COLOR_BOTH, 'Both', legendSpacing);
     }
 
-    // --- 10. Setup Input and Start Game ---
-    this.setupKeyboardInput();
-    this.startCpuTurn();
-  }
+    // --- 10. Setup Input and Start Game ---
+    this.setupKeyboardInput();
+    this.initMobileKeyboardBridge();
+    this.startCpuTurn();
+  }
 
   update() {
     // Runs every frame
@@ -399,6 +409,9 @@ handlePlayerClick(row, col) {
     return;
   }
   this.highlightSelectedCell(row, col);
+  if (this.isMobile) {
+    this.focusMobileInput();
+  }
 }
 
 /**
@@ -449,11 +462,11 @@ async finalizePlayerLetter(cell) {
   this.startCpuTurn();
 }
 
-/**
- * Sets up the keyboard listener for this scene.
- */
-setupKeyboardInput() {
-  this.input.keyboard.on("keydown", async (e) => {
+  /**
+   * Sets up the keyboard listener for this scene.
+   */
+  setupKeyboardInput() {
+    this.input.keyboard.on("keydown", async (e) => {
     // Debug: always log keydowns to trace missing events
     console.log('[KEY] keydown', { key: e.key, turnPhase: this.turnPhase, hasSelected: !!this.selectedCell });
     if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) return;
@@ -499,10 +512,108 @@ setupKeyboardInput() {
   });
 }
 
-/**
- * Finds a random empty cell on the grid.
- */
-findRandomEmptyCell() {
+  /**
+   * Creates a hidden input so mobile browsers can show a keyboard on demand.
+   */
+  initMobileKeyboardBridge() {
+    if (!this.isMobile || this.mobileInput) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 1;
+    input.inputMode = 'text';
+    input.autocapitalize = 'characters';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.style.position = 'fixed';
+    input.style.left = '50%';
+    input.style.bottom = '0';
+    input.style.transform = 'translateX(-50%)';
+    input.style.opacity = '0';
+    input.style.height = '1px';
+    input.style.width = '1px';
+    input.style.border = 'none';
+    input.style.background = 'transparent';
+    input.style.color = 'transparent';
+    input.style.caretColor = 'transparent';
+    input.style.pointerEvents = 'none';
+    input.style.zIndex = '1000';
+    document.body.appendChild(input);
+
+    const handleInput = (event) => {
+      if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) {
+        input.value = '';
+        return;
+      }
+      const raw = (event.target.value || '').toUpperCase().replace(/[^A-Z]/g, '');
+      input.value = '';
+      if (!raw) return;
+      const letter = raw.slice(-1);
+      this.selectedCell.letterText.setText(letter);
+    };
+
+    const handleKeydown = async (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (!this.selectedCell?.letterText.text) return;
+        this.turnPhase = "BUSY";
+        const cellToFinalize = this.selectedCell;
+        await this.finalizePlayerLetter(cellToFinalize);
+        this.clearSelectionState();
+        return;
+      }
+
+      if (event.key === 'Backspace') {
+        event.preventDefault();
+        if (this.selectedCell && !this.selectedCell.filled) {
+          this.selectedCell.letterText.setText('');
+        }
+      }
+    };
+
+    input.addEventListener('input', handleInput);
+    input.addEventListener('keydown', handleKeydown);
+
+    this.mobileInput = input;
+    this.mobileInputHandlers = { handleInput, handleKeydown };
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyMobileInput());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroyMobileInput());
+  }
+
+  focusMobileInput() {
+    if (!this.isMobile || !this.mobileInput) return;
+    this.mobileInput.value = '';
+    try {
+      this.mobileInput.focus({ preventScroll: true });
+    } catch (err) {
+      this.mobileInput.focus();
+    }
+    window.requestAnimationFrame(() => window.scrollTo(0, 0));
+  }
+
+  blurMobileInput() {
+    if (!this.isMobile || !this.mobileInput) return;
+    if (document.activeElement === this.mobileInput) {
+      this.mobileInput.blur();
+    }
+  }
+
+  destroyMobileInput() {
+    if (!this.mobileInput) return;
+    if (this.mobileInputHandlers) {
+      this.mobileInput.removeEventListener('input', this.mobileInputHandlers.handleInput);
+      this.mobileInput.removeEventListener('keydown', this.mobileInputHandlers.handleKeydown);
+      this.mobileInputHandlers = null;
+    }
+    this.mobileInput.remove();
+    this.mobileInput = null;
+  }
+
+  /**
+   * Finds a random empty cell on the grid.
+   */
+  findRandomEmptyCell() {
   const empties = [];
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
@@ -773,26 +884,32 @@ finishRound() {
    * Clears only the selection *state* (highlight and variable).
    * Does NOT clear temporary text.
    */
-  clearSelectionState() {
-    if (this.selectedCell) {
-      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
-      this.selectedCell = null;
-    }
-  }
+  clearSelectionState() {
+    if (this.selectedCell) {
+      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
+      this.selectedCell = null;
+    }
+    if (this.isMobile) {
+      this.blurMobileInput();
+    }
+  }
 
   /**
    * Cancels a selection (on ESCAPE).
    * This DOES clear temporary text.
    */
-  cancelSelection() {
-    if (this.selectedCell) {
-      if (!this.selectedCell.filled) {
-        this.selectedCell.letterText.setText('');
-      }
-      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
-      this.selectedCell = null;
-    }
-  }
+  cancelSelection() {
+    if (this.selectedCell) {
+      if (!this.selectedCell.filled) {
+        this.selectedCell.letterText.setText('');
+      }
+      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
+      this.selectedCell = null;
+    }
+    if (this.isMobile) {
+      this.blurMobileInput();
+    }
+  }
 
   /**
    * Highlights a new cell and cleans up the previous one.
