@@ -106,7 +106,11 @@ class MainScene extends Phaser.Scene {
     this.mobileFocusPending = false;
     this.mobileTouchFocusHandler = null;
     this.mobileTouchFocusTarget = null;
+    this.gridTop = 0;
+    this.instructionBaseY = 0;
+    this.instructionMargin = 16;
   this.isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    this.instructionMargin = this.isMobile ? 14 : 20;
     this.turnPhase = 'CPU_TURN'; // 'CPU_TURN' | 'PLAYER_TURN' | 'BUSY'
     this.selectedCell = null; 
     this.gameFinished = false;
@@ -117,15 +121,57 @@ class MainScene extends Phaser.Scene {
 
     const Z = { CELL: 10, HIGHLIGHT: 20, LETTER: 30, DECOR: 15 };
 
-    // --- 3. Grid Placement ---
+    // --- 3. Layout constants ---
+    const gridWidth = GRID_SIZE * CELL_SIZE;
+    const gridHeight = GRID_SIZE * CELL_SIZE;
+    const GRID_LEFT = (canvasWidth - gridWidth) / 2;
+    const GRID_RIGHT = GRID_LEFT + gridWidth;
+    const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
     const uiY = 10;
-    const headerPadding = this.isMobile ? 190 : 160;
-    const rawGridTop = Math.max(60, (canvasHeight - (GRID_SIZE * CELL_SIZE + 300)) / 2);
-    const GRID_TOP = Math.max(rawGridTop, uiY + headerPadding);
-    const GRID_LEFT = (canvasWidth - GRID_SIZE * CELL_SIZE) / 2;
-    const GRID_RIGHT = GRID_LEFT + GRID_SIZE * CELL_SIZE;
+    const instructionWidth = gridWidth - 24;
+    const turnFontSize = this.isMobile ? '14px' : '16px';
+    this.instructionBaseY = uiY + 95;
 
-    // --- 4. Build Grid ---
+    // --- 4. Top UI Row ---
+    this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
+      .setStrokeStyle(3, 0x555555)
+      .setOrigin(0.5, 0);
+    this.nextLetterText = this.add.text(gridCenterX, uiY + 40, '', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '48px',
+      fontStyle: 'bold',
+      color: '#82c4ff'
+    }).setOrigin(0.5);
+    this.scoreText = this.add.text(GRID_RIGHT, uiY + 12, 'Score: 0', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '20px',
+      fontStyle: 'bold',
+      color: LIGHT_TEXT
+    }).setOrigin(1, 0.5);
+    this.turnText = this.add.text(gridCenterX, this.instructionBaseY, '', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: turnFontSize,
+      fontStyle: 'bold',
+      color: LIGHT_TEXT,
+      align: 'center',
+      wordWrap: { width: instructionWidth, useAdvancedWrap: true },
+      lineSpacing: 4
+    }).setOrigin(0.5, 0);
+
+    // Reserve enough vertical room for the instruction block
+    const sampleInstruction = this.isMobile
+      ? this.getMobileTurnPrompt()
+      : this.getDesktopTurnPrompt();
+    this.turnText.setText(sampleInstruction);
+    const measuredHeight = this.turnText.getBounds().height || (this.isMobile ? 84 : 64);
+    this.turnText.setText('');
+    const rawGridTop = Math.max(60, (canvasHeight - (gridHeight + 300)) / 2);
+    const headerFloor = this.instructionBaseY + measuredHeight + this.instructionMargin;
+    const GRID_TOP = Math.max(rawGridTop, headerFloor);
+    this.gridTop = GRID_TOP;
+    this.positionInstructionText();
+
+    // --- 5. Build Grid ---
     for (let row = 0; row < GRID_SIZE; row++) {
       this.grid[row] = [];
       for (let col = 0; col < GRID_SIZE; col++) {
@@ -157,11 +203,8 @@ class MainScene extends Phaser.Scene {
       }
     }
 
-    // --- 5. Background Watermark ---
+    // --- 6. Background Watermark ---
     {
-      const gridWidth = GRID_SIZE * CELL_SIZE;
-      const gridHeight = GRID_SIZE * CELL_SIZE;
-      const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
       const gridCenterY = GRID_TOP + gridHeight / 2;
       const bgText = this.add.text(gridCenterX, gridCenterY, '5x5', {
         fontFamily: 'Arial Black, Verdana, sans-serif',
@@ -176,36 +219,6 @@ class MainScene extends Phaser.Scene {
         ease: 'Quad.easeOut'
       });
     }
-
-    // --- 6. Top UI Row ---
-    const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
-    const instructionWidth = GRID_SIZE * CELL_SIZE - 24;
-    const turnFontSize = this.isMobile ? '14px' : '16px';
-    // Removed "On Deck" label; nextLetterBox displays current CPU letter.
-    this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
-      .setStrokeStyle(3, 0x555555)
-      .setOrigin(0.5, 0);
-    this.nextLetterText = this.add.text(gridCenterX, uiY + 40, '', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '48px',
-      fontStyle: 'bold',
-      color: '#82c4ff'
-    }).setOrigin(0.5);
-    this.scoreText = this.add.text(GRID_RIGHT, uiY + 12, 'Score: 0', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '20px',
-      fontStyle: 'bold',
-      color: LIGHT_TEXT
-    }).setOrigin(1, 0.5);
-    this.turnText = this.add.text(gridCenterX, uiY + 95, '', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: turnFontSize,
-      fontStyle: 'bold',
-      color: LIGHT_TEXT,
-      align: 'center',
-      wordWrap: { width: instructionWidth, useAdvancedWrap: true },
-      lineSpacing: 4
-    }).setOrigin(0.5, 0);
 
     // --- 7. Row & Column Labels ---
     for (let r = 0; r < GRID_SIZE; r++) {
@@ -306,6 +319,31 @@ class MainScene extends Phaser.Scene {
     // Runs every frame
   }
 
+  getMobileTurnPrompt() {
+    return "Your turn: pick an empty square (or an occupied one to swap), type a letter, then press Enter.";
+  }
+
+  getDesktopTurnPrompt() {
+    return "Your turn: pick a square (or an occupied one to swap), then press a letter key to place it.";
+  }
+
+  setInstructionText(message = "") {
+    if (!this.turnText) return;
+    this.turnText.setText(message);
+    this.positionInstructionText();
+  }
+
+  positionInstructionText() {
+    if (!this.turnText) return;
+    const gridTop = this.gridTop || (this.instructionBaseY + 220);
+    const bounds = this.turnText.getBounds();
+    const height = bounds.height || 0;
+    const margin = this.instructionMargin ?? 16;
+    const allowedY = gridTop - height - margin;
+    const newY = Math.min(this.instructionBaseY, allowedY);
+    this.turnText.setY(newY);
+  }
+
   // ======================================================
 // ===============   TURN CONTROL  (Class Methods)  =====
 // ======================================================
@@ -338,7 +376,7 @@ startCpuTurn() {
   this.currentLetter = this.pickNextLetter();
   this.updateNextLetterUI(true);
   const swapsLeft = Math.max(0, 3 - (this.swapsUsed || 0));
-  this.turnText.setText(`Place this letter in an empty square or replace an occupied square (Swaps left: ${swapsLeft}).`);
+  this.setInstructionText(`Place this letter in an empty square or replace an occupied square (Swaps left: ${swapsLeft}).`);
   this.clearSelectionState();
 }
 
@@ -351,7 +389,7 @@ async handleCpuPlacement(row, col) {
 
   const replacingExisting = cell.filled;
   if (replacingExisting && this.swapsUsed >= 3) {
-    this.turnText.setText("All swaps used. Pick an empty square for the CPU letter.");
+    this.setInstructionText("All swaps used. Pick an empty square for the CPU letter.");
     return;
   }
 
@@ -389,9 +427,9 @@ startPlayerTurn() {
   this.currentLetter = ""; // clear CPU letter
   this.updateNextLetterUI(false);
   if (this.isMobile) {
-    this.turnText.setText("Your turn: pick an empty square (or an occupied one to swap), type a letter, then press Enter.");
+    this.setInstructionText(this.getMobileTurnPrompt());
   } else {
-    this.turnText.setText("Your turn: pick a square (or an occupied one to swap), then press a letter key to place it.");
+    this.setInstructionText(this.getDesktopTurnPrompt());
   }
   this.clearSelectionState();
 }
@@ -406,7 +444,7 @@ handlePlayerClick(row, col) {
   if (!cell) return;
   // allow selecting an occupied cell only if swaps remain
   if (cell.filled && (this.swapsUsed >= 3)) {
-    this.turnText.setText("All swaps used. Pick an empty square for your letter.");
+    this.setInstructionText("All swaps used. Pick an empty square for your letter.");
     return;
   }
   this.highlightSelectedCell(row, col);
@@ -582,7 +620,6 @@ setupMobileKeyboardBridge(handleLetter, handleEnter) {
   if (!this.mobileTouchFocusHandler) {
     this.mobileTouchFocusHandler = () => {
       if (!this.mobileFocusPending) return;
-      this.mobileFocusPending = false;
       this.focusMobileLetterField();
     };
     this.mobileTouchFocusTarget = window;
@@ -613,19 +650,27 @@ setupMobileKeyboardBridge(handleLetter, handleEnter) {
 
 focusMobileLetterField() {
   if (!this.isMobile || !this.mobileInput) return;
-  this.mobileFocusPending = false;
-  this.mobileInput.value = '';
   const target = this.mobileInput;
-  const focus = () => {
-    if (!this.mobileInput || target !== this.mobileInput) return;
+  target.value = '';
+  const attemptFocus = () => {
+    if (!this.mobileInput || target !== this.mobileInput) return false;
     try {
       target.focus({ preventScroll: true });
     } catch {
       target.focus();
     }
+    return document.activeElement === target;
   };
-  focus();
-  setTimeout(focus, 0);
+  const immediate = attemptFocus();
+  if (immediate) {
+    this.mobileFocusPending = false;
+    return;
+  }
+  setTimeout(() => {
+    if (attemptFocus()) {
+      this.mobileFocusPending = false;
+    }
+  }, 0);
 }
 
 blurMobileLetterField() {
@@ -666,7 +711,7 @@ finishRound() {
   this.turnPhase = "BUSY";
   this.updateNextLetterUI(false);
   this.clearSelectionState();
-  this.turnText.setText("Board complete! Final score coming up...");
+  this.setInstructionText("Board complete! Final score coming up...");
 
   const summaryWords = this.collectSummaryWords();
   const boardSnapshot = this.captureBoardSnapshot();
