@@ -175,7 +175,7 @@ class MainScene extends Phaser.Scene {
     const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
     const gridPixelWidth = GRID_SIZE * CELL_SIZE;
     const instructionWidth = gridPixelWidth - 24;
-    const instructionBaseline = Math.max(uiY + 110, GRID_TOP - 16);
+    const instructionBaseline = Math.max(uiY + 90, GRID_TOP - 24);
     // Removed "On Deck" label; nextLetterBox displays current CPU letter.
     this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
       .setStrokeStyle(3, 0x555555)
