@@ -333,8 +333,6 @@ async placeLetter(row, col) {
     return this.handlePlayerClick(row, col);
   }
 }
-
-}
 /**
  * CPU prepares its next letter and waits for the player to place it.
  */
