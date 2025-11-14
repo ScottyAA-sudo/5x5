@@ -1,11 +1,11 @@
-// ===================== Supabase =====================
+﻿// ===================== Supabase =====================
 const supabase = window.supabase.createClient(
-  "https://bztovbzqubypgdskypjt.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6dG92YnpxdWJ5cGdkc2t5cGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyODM2NTIsImV4cCI6MjA3NDg1OTY1Mn0.DkWqGmN0B-9AUj7kr6B11hhhnB0b2BKFpOsnrixFNQU"
+  "https://bztovbzqubypgdskypjt.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6dG92YnpxdWJ5cGdkc2t5cGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyODM2NTIsImV4cCI6MjA3NDg1OTY1Mn0.DkWqGmN0B-9AUj7kr6B11hhhnB0b2BKFpOsnrixFNQU"
 );
 
 if (screen.orientation && screen.orientation.lock) {
-  screen.orientation.lock('portrait').catch(() => {});
+  screen.orientation.lock('portrait').catch(() => {});
 }
 
 // ===================== Game State =====================
@@ -14,16 +14,16 @@ const DARK_BG = '#111111';
 const LIGHT_TEXT = '#f4f4f4';
 
 const gameConfig = {
-  type: Phaser.AUTO,
-  backgroundColor: DARK_BG,
-  parent: 'phaser-game',
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: window.innerWidth,
-    height: window.innerHeight
-  },
-  render: { pixelArt: false, antialias: true }
+  type: Phaser.AUTO,
+  backgroundColor: DARK_BG,
+  parent: 'phaser-game',
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: window.innerWidth,
+    height: window.innerHeight
+  },
+  render: { pixelArt: false, antialias: true }
 };
 
 const GRID_SIZE = 5;
@@ -31,34 +31,34 @@ let CELL_SIZE = 110;
 
 // Responsive scaling
 if (window.innerWidth < 500) {
-  CELL_SIZE = 70;
-  gameConfig.width = 400;
-  gameConfig.height = 700;
+  CELL_SIZE = 70;
+  gameConfig.width = 400;
+  gameConfig.height = 700;
 } else if (window.innerWidth < 800) {
-  CELL_SIZE = 90;
-  gameConfig.width = 500;
-  gameConfig.height = 850;
+  CELL_SIZE = 90;
+  gameConfig.width = 500;
+  gameConfig.height = 850;
 }
 
 // ===================== Letter Distribution =====================
 const scrabbleDistribution = {
-  A: 10, B: 5, C: 3, D: 6, E: 15,
-  F: 3, G: 4, H: 3, I: 9, J: 1,
-  K: 2, L: 6, M: 4, N: 8, O: 9,
-  P: 3, Q: 1, R: 8, S: 5, T: 8,
-  U: 5, V: 2, W: 2, X: 1, Y: 2, Z: 1
+  A: 10, B: 5, C: 3, D: 6, E: 15,
+  F: 3, G: 4, H: 3, I: 9, J: 1,
+  K: 2, L: 6, M: 4, N: 8, O: 9,
+  P: 3, Q: 1, R: 8, S: 5, T: 8,
+  U: 5, V: 2, W: 2, X: 1, Y: 2, Z: 1
 };
 const weightedLetters = [];
 for (const [letter, count] of Object.entries(scrabbleDistribution)) {
-  for (let i = 0; i < count; i++) weightedLetters.push(letter);
+  for (let i = 0; i < count; i++) weightedLetters.push(letter);
 }
 // --- Bigram + vowel bias maps ---
 const bigramMap = {
-  A: "NTRSL", B: "REALO", C: "HAREO", D: "EARNO", E: "RSTNL",
-  F: "REALO", G: "RANEO", H: "EAOIN", I: "NESTR",
-  J: "UOEA", K: "NEA", L: "EAST", M: "EAIO", N: "DTEA",
-  O: "RNSTL", P: "REALS", Q: "U", R: "ESTOA", S: "TEAOR", T: "HEAOR",
-  U: "RSTNL", V: "AEIO", W: "AROE", X: "PEA", Y: "AEIO", Z: "EA"
+  A: "NTRSL", B: "REALO", C: "HAREO", D: "EARNO", E: "RSTNL",
+  F: "REALO", G: "RANEO", H: "EAOIN", I: "NESTR",
+  J: "UOEA", K: "NEA", L: "EAST", M: "EAIO", N: "DTEA",
+  O: "RNSTL", P: "REALS", Q: "U", R: "ESTOA", S: "TEAOR", T: "HEAOR",
+  U: "RSTNL", V: "AEIO", W: "AROE", X: "PEA", Y: "AEIO", Z: "EA"
 };
 const vowels = ["A","E","I","O","U"];
 const consonants = "BCDFGHJKLMNPQRSTVWXYZ".split("");
@@ -78,20 +78,20 @@ const HIGHLIGHT_FILLED = 0xbababa;
  * The create() method resets the game.
  */
 class MainScene extends Phaser.Scene {
-  constructor() {
-    super('MainScene');
-  }
+  constructor() {
+    super('MainScene');
+  }
 
-  preload() {
-    // Preload assets here
-  }
+  preload() {
+    // Preload assets here
+  }
 
-  create() {
-    // --- 1. Initialize Scene-Specific State ---
-    this.grid = [];
-    this.score = 0;
-    this.rowScoreLabels = [];
-    this.colScoreLabels = [];
+  create() {
+    // --- 1. Initialize Scene-Specific State ---
+    this.grid = [];
+    this.score = 0;
+    this.rowScoreLabels = [];
+    this.colScoreLabels = [];
     this.rowScores = Array(GRID_SIZE).fill(0);
     this.colScores = Array(GRID_SIZE).fill(0);
     this.rowBestLen = Array(GRID_SIZE).fill(0);
@@ -99,44 +99,97 @@ class MainScene extends Phaser.Scene {
     this.rowWords = Array(GRID_SIZE).fill(null);
     this.colWords = Array(GRID_SIZE).fill(null);
     this.wordCache = Object.create(null);
-    this.currentLetter = '';
-    this.swapsUsed = 0;
-    this.swapIndicators = [];
+    this.currentLetter = '';
+    this.swapsUsed = 0;
+    this.swapIndicators = [];
+    this.mobileInput = null;
+    this.mobileFocusPending = false;
+    this.mobileTouchFocusHandler = null;
+    this.mobileTouchFocusTarget = null;
+    this.gridTop = 0;
+    this.instructionBaseY = 0;
+    this.instructionMargin = 16;
   this.isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    this.turnPhase = 'CPU_TURN'; // 'CPU_TURN' | 'PLAYER_TURN' | 'BUSY'
+    this.instructionMargin = this.isMobile ? 14 : 20;
+    this.turnPhase = 'CPU_TURN'; // 'CPU_TURN' | 'PLAYER_TURN' | 'BUSY'
     this.selectedCell = null; 
     this.gameFinished = false;
 
-    // --- 2. Get Canvas Size ---
-    const canvasWidth = this.sys.game.scale.gameSize.width;
-    const canvasHeight = this.sys.game.scale.gameSize.height;
+    // --- 2. Get Canvas Size ---
+    const canvasWidth = this.sys.game.scale.gameSize.width;
+    const canvasHeight = this.sys.game.scale.gameSize.height;
 
-    const Z = { CELL: 10, HIGHLIGHT: 20, LETTER: 30, DECOR: 15 };
+    const Z = { CELL: 10, HIGHLIGHT: 20, LETTER: 30, DECOR: 15 };
 
-    // --- 3. Grid Placement ---
-    const GRID_LEFT = (canvasWidth - GRID_SIZE * CELL_SIZE) / 2;
-    const GRID_RIGHT = GRID_LEFT + GRID_SIZE * CELL_SIZE;
-    const GRID_TOP = Math.max(60, (canvasHeight - (GRID_SIZE * CELL_SIZE + 300)) / 2);
+    // --- 3. Layout constants ---
+    const gridWidth = GRID_SIZE * CELL_SIZE;
+    const gridHeight = GRID_SIZE * CELL_SIZE;
+    const GRID_LEFT = (canvasWidth - gridWidth) / 2;
+    const GRID_RIGHT = GRID_LEFT + gridWidth;
+    const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
+    const uiY = 10;
+    const instructionWidth = gridWidth - 24;
+    const turnFontSize = this.isMobile ? '14px' : '16px';
+    this.instructionBaseY = uiY + 95;
 
-    // --- 4. Build Grid ---
-    for (let row = 0; row < GRID_SIZE; row++) {
-      this.grid[row] = [];
-      for (let col = 0; col < GRID_SIZE; col++) {
-        const x = GRID_LEFT + col * CELL_SIZE + CELL_SIZE / 2;
-        const y = GRID_TOP + row * CELL_SIZE + CELL_SIZE / 2;
+    // --- 4. Top UI Row ---
+    this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
+      .setStrokeStyle(3, 0x555555)
+      .setOrigin(0.5, 0);
+    this.nextLetterText = this.add.text(gridCenterX, uiY + 40, '', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '48px',
+      fontStyle: 'bold',
+      color: '#82c4ff'
+    }).setOrigin(0.5);
+    this.scoreText = this.add.text(GRID_RIGHT, uiY + 12, 'Score: 0', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '20px',
+      fontStyle: 'bold',
+      color: LIGHT_TEXT
+    }).setOrigin(1, 0.5);
+    this.turnText = this.add.text(gridCenterX, this.instructionBaseY, '', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: turnFontSize,
+      fontStyle: 'bold',
+      color: LIGHT_TEXT,
+      align: 'center',
+      wordWrap: { width: instructionWidth, useAdvancedWrap: true },
+      lineSpacing: 4
+    }).setOrigin(0.5, 0);
 
-        const rect = this.add.rectangle(x, y, CELL_SIZE, CELL_SIZE, COLOR_NONE, 1)
-          .setStrokeStyle(2, 0x383838)
-          .setInteractive();
-        const highlight = this.add.rectangle(x, y, CELL_SIZE - 4, CELL_SIZE - 4, 0xffffff, 0);
-        const letterText = this.add.text(x, y, '', {
-          fontFamily: 'Arial Black, Verdana, sans-serif',
-          fontSize: '32px',
-          fontStyle: 'bold',
-          color: LIGHT_TEXT
-        }).setOrigin(0.5);
+    // Reserve enough vertical room for the instruction block
+    const sampleInstruction = this.isMobile
+      ? this.getMobileTurnPrompt()
+      : this.getDesktopTurnPrompt();
+    this.turnText.setText(sampleInstruction);
+    const measuredHeight = this.turnText.getBounds().height || (this.isMobile ? 84 : 64);
+    this.turnText.setText('');
+    const rawGridTop = Math.max(60, (canvasHeight - (gridHeight + 300)) / 2);
+    const headerFloor = this.instructionBaseY + measuredHeight + this.instructionMargin;
+    const GRID_TOP = Math.max(rawGridTop, headerFloor);
+    this.gridTop = GRID_TOP;
+    this.positionInstructionText();
 
-        rect.on('pointerdown', () => this.placeLetter(row, col));
+    // --- 5. Build Grid ---
+    for (let row = 0; row < GRID_SIZE; row++) {
+      this.grid[row] = [];
+      for (let col = 0; col < GRID_SIZE; col++) {
+        const x = GRID_LEFT + col * CELL_SIZE + CELL_SIZE / 2;
+        const y = GRID_TOP + row * CELL_SIZE + CELL_SIZE / 2;
+
+        const rect = this.add.rectangle(x, y, CELL_SIZE, CELL_SIZE, COLOR_NONE, 1)
+          .setStrokeStyle(2, 0x383838)
+          .setInteractive();
+        const highlight = this.add.rectangle(x, y, CELL_SIZE - 4, CELL_SIZE - 4, 0xffffff, 0);
+        const letterText = this.add.text(x, y, '', {
+          fontFamily: 'Arial Black, Verdana, sans-serif',
+          fontSize: '32px',
+          fontStyle: 'bold',
+          color: LIGHT_TEXT
+        }).setOrigin(0.5);
+
+        rect.on('pointerdown', () => this.placeLetter(row, col));
 
         this.grid[row][col] = {
           rect,
@@ -147,160 +200,151 @@ class MainScene extends Phaser.Scene {
           colValid: false,
           patternCode: 'none'
         };
-      }
-    }
+      }
+    }
 
-    // --- 5. Background Watermark ---
-    {
-      const gridWidth = GRID_SIZE * CELL_SIZE;
-      const gridHeight = GRID_SIZE * CELL_SIZE;
-      const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
-      const gridCenterY = GRID_TOP + gridHeight / 2;
-      const bgText = this.add.text(gridCenterX, gridCenterY, '5×5', {
-        fontFamily: 'Arial Black, Verdana, sans-serif',
-        fontSize: `${CELL_SIZE * 2.6}px`,
-        fontStyle: 'bold',
-        color: '#ffffff'
-      }).setOrigin(0.5).setAlpha(0.10).setAngle(-10).setDepth(Z.DECOR);
-      this.tweens.add({
-        targets: bgText,
-        alpha: { from: 0, to: 0.06 },
-        duration: 600,
-        ease: 'Quad.easeOut'
-      });
-    }
+    // --- 6. Background Watermark ---
+    {
+      const gridCenterY = GRID_TOP + gridHeight / 2;
+      const bgText = this.add.text(gridCenterX, gridCenterY, '5x5', {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: `${CELL_SIZE * 2.6}px`,
+        fontStyle: 'bold',
+        color: '#ffffff'
+      }).setOrigin(0.5).setAlpha(0.10).setAngle(-10).setDepth(Z.DECOR);
+      this.tweens.add({
+        targets: bgText,
+        alpha: { from: 0, to: 0.06 },
+        duration: 600,
+        ease: 'Quad.easeOut'
+      });
+    }
 
-    // --- 6. Top UI Row ---
-    const uiY = 10;
-    const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
-    const instructionWidth = GRID_SIZE * CELL_SIZE - 24;
-    const turnFontSize = this.isMobile ? '14px' : '16px';
-    // Removed "On Deck" label; nextLetterBox displays current CPU letter.
-    this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
-      .setStrokeStyle(3, 0x555555)
-      .setOrigin(0.5, 0);
-    this.nextLetterText = this.add.text(gridCenterX, uiY + 40, '', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '48px',
-      fontStyle: 'bold',
-      color: '#82c4ff'
-    }).setOrigin(0.5);
-    this.scoreText = this.add.text(GRID_RIGHT, uiY + 12, 'Score: 0', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '20px',
-      fontStyle: 'bold',
-      color: LIGHT_TEXT
-    }).setOrigin(1, 0.5);
-    this.turnText = this.add.text(gridCenterX, uiY + 95, '', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: turnFontSize,
-      fontStyle: 'bold',
-      color: LIGHT_TEXT,
-      align: 'center',
-      wordWrap: { width: instructionWidth, useAdvancedWrap: true },
-      lineSpacing: 4
-    }).setOrigin(0.5, 0);
-
-    // --- 7. Row & Column Labels ---
-    for (let r = 0; r < GRID_SIZE; r++) {
-      const x = GRID_LEFT + GRID_SIZE * CELL_SIZE + 16;
-      const y = GRID_TOP + r * CELL_SIZE + CELL_SIZE / 2;
-      this.rowScoreLabels[r] = this.add.text(x, y, '', {
-        fontFamily: 'Arial Black, Verdana, sans-serif',
-        fontSize: '16px',
-        fontStyle: 'bold',
-        color: '#cfcfcf'
-      }).setOrigin(0, 0.5);
-    }
-    for (let c = 0; c < GRID_SIZE; c++) {
-      const x = GRID_LEFT + c * CELL_SIZE + CELL_SIZE / 2;
-      const y = GRID_TOP + GRID_SIZE * CELL_SIZE + 8;
-      this.colScoreLabels[c] = this.add.text(x, y, '', {
-        fontFamily: 'Arial Black, Verdana, sans-serif',
-        fontSize: '16px',
-        fontStyle: 'bold',
-        color: '#cfcfcf'
-      }).setOrigin(0.5, 0);
+    // --- 7. Row & Column Labels ---
+    for (let r = 0; r < GRID_SIZE; r++) {
+      const x = GRID_LEFT + GRID_SIZE * CELL_SIZE + 16;
+      const y = GRID_TOP + r * CELL_SIZE + CELL_SIZE / 2;
+      this.rowScoreLabels[r] = this.add.text(x, y, '', {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#cfcfcf'
+      }).setOrigin(0, 0.5);
+    }
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const x = GRID_LEFT + c * CELL_SIZE + CELL_SIZE / 2;
+      const y = GRID_TOP + GRID_SIZE * CELL_SIZE + 8;
+      this.colScoreLabels[c] = this.add.text(x, y, '', {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#cfcfcf'
+      }).setOrigin(0.5, 0);
     }
 
     this.refreshCellColors();
 
     // --- 8. Swap Lights ---
-    const lightsY = GRID_TOP + GRID_SIZE * CELL_SIZE + 60;
-    const startX = canvasWidth / 2 - 60;
-    for (let i = 0; i < 3; i++) {
-      const light = this.add.circle(startX + i * 60, lightsY, 12, 0x2d2d2d);
-      light.setStrokeStyle(2, 0x555555);
-      this.swapIndicators.push(light);
-    }
-    this.updateSwapIndicators();
-    this.add.text(canvasWidth / 2, lightsY + 20, 'Swaps Used', {
-      fontFamily: 'Verdana, sans-serif',
-      fontSize: '12px',
-      color: '#c0c0c0'
-    }).setOrigin(0.5, 0);
-    
-    // --- 9. Rules Box ---
-    {
-      const boxY = lightsY + 60;
-      const boxWidth = Math.min(canvasWidth * 0.9, 480);
-      const boxHeight = 200;
-      const boxX = canvasWidth / 2;
-      this.add.rectangle(boxX, boxY + boxHeight / 2, boxWidth, boxHeight, 0x1b1b1b, 0.95).setStrokeStyle(2, 0x444444).setOrigin(0.5).setDepth(0);
-      const title = this.add.text(boxX, 0, '3-letter words = 5 pts | 4-letter = 15 pts | 5-letter = 25 pts', {
-        fontFamily: 'Arial Black, Verdana, sans-serif',
-        fontSize: '12px',
-        color: '#dddddd',
-      }).setOrigin(0.5, 0);
-      const rules = [
-        '• Words must start from the top row or far-left column',
-        '• You can make 3 "swaps" overwriting a placed letter',
-        '• The game ends when all letters have been placed',
-      ];
-      const titleHeight = 18;
-      const rulesHeight = rules.length * 22;
-      const legendHeight = 26;
-      const totalContentHeight = titleHeight + rulesHeight + legendHeight + 40;
-      const startY = boxY + (boxHeight - totalContentHeight) / 2;
-      title.setY(startY);
-      let textY = startY + titleHeight + 8;
-      rules.forEach((line) => {
-        this.add.text(boxX, textY, line, {
-          fontFamily: 'Verdana, sans-serif',
-          fontSize: '14px',
-          color: '#cfcfcf',
-          align: 'center',
-          wordWrap: { width: boxWidth - 60 },
-        }).setOrigin(0.5, 0);
-        textY += 22;
-      });
-      this.add.line(boxX, textY + 6, boxX - boxWidth / 2 + 10, textY + 6, boxX + boxWidth / 2 - 10, textY + 6, 0x444444).setOrigin(0.5, 0).setLineWidth(1);
-      const legendY = textY + 28;
-      const legendSpacing = 110;
-      const drawLegendItem = (color, label, offsetX) => {
-        const rect = this.add.rectangle(boxX + offsetX, legendY, 18, 18, color, 0.7).setOrigin(0.5);
-        rect.setStrokeStyle(1, 0x666666, 0.9);
-        this.add.text(boxX + offsetX + 16, legendY, label, {
-          fontFamily: 'Verdana, sans-serif',
-          fontSize: '14px',
-          color: '#dddddd',
-        }).setOrigin(0, 0.5);
-      };
-      drawLegendItem(COLOR_ROW, 'Horizontal', -legendSpacing);
-      drawLegendItem(COLOR_COL, 'Vertical', 0);
-      drawLegendItem(COLOR_BOTH, 'Both', legendSpacing);
-    }
+    const lightsY = GRID_TOP + GRID_SIZE * CELL_SIZE + 60;
+    const startX = canvasWidth / 2 - 60;
+    for (let i = 0; i < 3; i++) {
+      const light = this.add.circle(startX + i * 60, lightsY, 12, 0x2d2d2d);
+      light.setStrokeStyle(2, 0x555555);
+      this.swapIndicators.push(light);
+    }
+    this.updateSwapIndicators();
+    this.add.text(canvasWidth / 2, lightsY + 20, 'Swaps Used', {
+      fontFamily: 'Verdana, sans-serif',
+      fontSize: '12px',
+      color: '#c0c0c0'
+    }).setOrigin(0.5, 0);
+    
+    // --- 9. Rules Box ---
+    {
+      const boxY = lightsY + 60;
+      const boxWidth = Math.min(canvasWidth * 0.9, 480);
+      const boxHeight = 200;
+      const boxX = canvasWidth / 2;
+      this.add.rectangle(boxX, boxY + boxHeight / 2, boxWidth, boxHeight, 0x1b1b1b, 0.95).setStrokeStyle(2, 0x444444).setOrigin(0.5).setDepth(0);
+      const title = this.add.text(boxX, 0, '3-letter words = 5 pts | 4-letter = 15 pts | 5-letter = 25 pts', {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: '12px',
+        color: '#dddddd',
+      }).setOrigin(0.5, 0);
+      const rules = [
+        '€¢ Words must start from the top row or far-left column',
+        '€¢ You can make 3 "swaps" overwriting a placed letter',
+        '€¢ The game ends when all letters have been placed',
+      ];
+      const titleHeight = 18;
+      const rulesHeight = rules.length * 22;
+      const legendHeight = 26;
+      const totalContentHeight = titleHeight + rulesHeight + legendHeight + 40;
+      const startY = boxY + (boxHeight - totalContentHeight) / 2;
+      title.setY(startY);
+      let textY = startY + titleHeight + 8;
+      rules.forEach((line) => {
+        this.add.text(boxX, textY, line, {
+          fontFamily: 'Verdana, sans-serif',
+          fontSize: '14px',
+          color: '#cfcfcf',
+          align: 'center',
+          wordWrap: { width: boxWidth - 60 },
+        }).setOrigin(0.5, 0);
+        textY += 22;
+      });
+      this.add.line(boxX, textY + 6, boxX - boxWidth / 2 + 10, textY + 6, boxX + boxWidth / 2 - 10, textY + 6, 0x444444).setOrigin(0.5, 0).setLineWidth(1);
+      const legendY = textY + 28;
+      const legendSpacing = 110;
+      const drawLegendItem = (color, label, offsetX) => {
+        const rect = this.add.rectangle(boxX + offsetX, legendY, 18, 18, color, 0.7).setOrigin(0.5);
+        rect.setStrokeStyle(1, 0x666666, 0.9);
+        this.add.text(boxX + offsetX + 16, legendY, label, {
+          fontFamily: 'Verdana, sans-serif',
+          fontSize: '14px',
+          color: '#dddddd',
+        }).setOrigin(0, 0.5);
+      };
+      drawLegendItem(COLOR_ROW, 'Horizontal', -legendSpacing);
+      drawLegendItem(COLOR_COL, 'Vertical', 0);
+      drawLegendItem(COLOR_BOTH, 'Both', legendSpacing);
+    }
 
-    // --- 10. Setup Input and Start Game ---
-    this.setupKeyboardInput();
-    this.startCpuTurn();
-  }
+    // --- 10. Setup Input and Start Game ---
+    this.setupKeyboardInput();
+    this.startCpuTurn();
+  }
 
-  update() {
-    // Runs every frame
-  }
+  update() {
+    // Runs every frame
+  }
 
-  // ======================================================
+  getMobileTurnPrompt() {
+    return "Your turn: pick an empty square (or an occupied one to swap), type a letter, then press Enter.";
+  }
+
+  getDesktopTurnPrompt() {
+    return "Your turn: pick a square (or an occupied one to swap), then press a letter key to place it.";
+  }
+
+  setInstructionText(message = "") {
+    if (!this.turnText) return;
+    this.turnText.setText(message);
+    this.positionInstructionText();
+  }
+
+  positionInstructionText() {
+    if (!this.turnText) return;
+    const gridTop = this.gridTop || (this.instructionBaseY + 220);
+    const bounds = this.turnText.getBounds();
+    const height = bounds.height || 0;
+    const margin = this.instructionMargin ?? 16;
+    const allowedY = gridTop - height - margin;
+    const newY = Math.min(this.instructionBaseY, allowedY);
+    this.turnText.setY(newY);
+  }
+
+  // ======================================================
 // ===============   TURN CONTROL  (Class Methods)  =====
 // ======================================================
 
@@ -327,12 +371,12 @@ async placeLetter(row, col) {
 startCpuTurn() {
   if (this.gameFinished) return;
   if (this.isBoardFull()) return this.finishRound();
-  console.log('[TURN] startCpuTurn() — entering CPU_TURN');
+  console.log('[TURN] startCpuTurn() €” entering CPU_TURN');
   this.turnPhase = "CPU_TURN";
   this.currentLetter = this.pickNextLetter();
   this.updateNextLetterUI(true);
   const swapsLeft = Math.max(0, 3 - (this.swapsUsed || 0));
-  this.turnText.setText(`Place this letter in an empty square or replace an occupied square (Swaps left: ${swapsLeft}).`);
+  this.setInstructionText(`Place this letter in an empty square or replace an occupied square (Swaps left: ${swapsLeft}).`);
   this.clearSelectionState();
 }
 
@@ -345,7 +389,7 @@ async handleCpuPlacement(row, col) {
 
   const replacingExisting = cell.filled;
   if (replacingExisting && this.swapsUsed >= 3) {
-    this.turnText.setText("All swaps used. Pick an empty square for the CPU letter.");
+    this.setInstructionText("All swaps used. Pick an empty square for the CPU letter.");
     return;
   }
 
@@ -361,7 +405,7 @@ async handleCpuPlacement(row, col) {
 
   await this.adjudicatePlacement(cell);
 
-  // CPU done → Player turn
+  // CPU done †’ Player turn
   if (this.isBoardFull()) {
     this.finishRound();
     return;
@@ -378,14 +422,14 @@ async handleCpuPlacement(row, col) {
 startPlayerTurn() {
   if (this.gameFinished) return;
   if (this.isBoardFull()) return this.finishRound();
-  console.log('[TURN] startPlayerTurn() — entering PLAYER_TURN');
+  console.log('[TURN] startPlayerTurn() €” entering PLAYER_TURN');
   this.turnPhase = "PLAYER_TURN";
   this.currentLetter = ""; // clear CPU letter
   this.updateNextLetterUI(false);
   if (this.isMobile) {
-    this.turnText.setText("Your turn: pick an empty square (or an occupied one to swap), type a letter, then press Enter.");
+    this.setInstructionText(this.getMobileTurnPrompt());
   } else {
-    this.turnText.setText("Your turn: pick a square (or an occupied one to swap), then press a letter key to place it.");
+    this.setInstructionText(this.getDesktopTurnPrompt());
   }
   this.clearSelectionState();
 }
@@ -400,7 +444,7 @@ handlePlayerClick(row, col) {
   if (!cell) return;
   // allow selecting an occupied cell only if swaps remain
   if (cell.filled && (this.swapsUsed >= 3)) {
-    this.turnText.setText("All swaps used. Pick an empty square for your letter.");
+    this.setInstructionText("All swaps used. Pick an empty square for your letter.");
     return;
   }
   this.highlightSelectedCell(row, col);
@@ -415,7 +459,7 @@ async finalizePlayerLetter(cell) {
   const letter = cell.letterText.text?.toUpperCase() || "";
   if (!letter.match(/^[A-Z]$/)) {
     console.warn("Invalid or empty letter.");
-    console.log('[TURN] finalizePlayerLetter() — invalid, handing to CPU');
+    console.log('[TURN] finalizePlayerLetter() €” invalid, handing to CPU');
     this.startCpuTurn();
     return;
   }
@@ -450,7 +494,7 @@ async finalizePlayerLetter(cell) {
   }
 
   // After adjudication, hand control back to CPU
-  console.log('[TURN] finalizePlayerLetter() — switching to CPU_TURN');
+  console.log('[TURN] finalizePlayerLetter() €” switching to CPU_TURN');
   this.startCpuTurn();
 }
 
@@ -458,50 +502,182 @@ async finalizePlayerLetter(cell) {
  * Sets up the keyboard listener for this scene.
  */
 setupKeyboardInput() {
+  const handleLetter = async (letter) => {
+    if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) return;
+    this.selectedCell.letterText.setText(letter);
+    if (!this.isMobile) {
+      console.log('[KEY] letter typed - auto-finalizing', { letter });
+      try {
+        this.turnPhase = "BUSY";
+        const cellToFinalize = this.selectedCell;
+        await this.finalizePlayerLetter(cellToFinalize);
+        this.clearSelectionState();
+      } catch (err) {
+        console.error('Error auto-finalizing letter:', err);
+      }
+    } else {
+      // On mobile, let the user press Enter to confirm
+      console.log('[KEY] letter typed (mobile) - waiting for Enter', { letter });
+    }
+  };
+
+  const handleEnter = async () => {
+    if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell?.letterText.text) return;
+    this.turnPhase = "BUSY";
+    const cellToFinalize = this.selectedCell;
+    await this.finalizePlayerLetter(cellToFinalize);
+    this.clearSelectionState();
+  };
+
   this.input.keyboard.on("keydown", async (e) => {
     // Debug: always log keydowns to trace missing events
     console.log('[KEY] keydown', { key: e.key, turnPhase: this.turnPhase, hasSelected: !!this.selectedCell });
+    const raw = e.key || '';
+    const k = raw.toUpperCase();
+
+    if (k === "ESCAPE") {
+      this.cancelSelection();
+      return;
+    }
+
     if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) return;
 
-    const raw = e.key;
-    const k = raw.toUpperCase();
-    if (k === "ESCAPE") return this.cancelSelection();
-
     // Only accept single-letter keys A-Z
-    if (/^[a-zA-Z]$/.test(raw)) {
-      this.selectedCell.letterText.setText(k);
-      // On desktop, auto-finalize for convenience; on mobile, require Enter
-      if (!this.isMobile) {
-        console.log('[KEY] letter typed — auto-finalizing', { k });
-        try {
-          this.turnPhase = "BUSY";
-          const cellToFinalize = this.selectedCell;
-          await this.finalizePlayerLetter(cellToFinalize);
-          this.clearSelectionState();
-        } catch (err) {
-          console.error('Error auto-finalizing letter:', err);
-        }
-        return;
-      } else {
-        // On mobile, let the user press Enter to confirm
-        console.log('[KEY] letter typed (mobile) — waiting for Enter', { k });
-        return;
-      }
+    if (/^[A-Z]$/.test(k)) {
+      await handleLetter(k);
+      return;
     }
 
-    if (k === "ENTER" && this.selectedCell?.letterText.text) {
-      // Lock input
-      this.turnPhase = "BUSY";
-
-      // Keep a live reference before clearing
-      const cellToFinalize = this.selectedCell;
-
-      await this.finalizePlayerLetter(cellToFinalize);
-
-      // Now clear highlight after finalization
-      this.clearSelectionState();
+    if (k === "ENTER") {
+      await handleEnter();
     }
   });
+
+  if (this.isMobile) {
+    this.setupMobileKeyboardBridge(handleLetter, handleEnter);
+  }
+}
+
+setupMobileKeyboardBridge(handleLetter, handleEnter) {
+  if (this.mobileInput) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.autocapitalize = 'characters';
+  input.autocomplete = 'off';
+  input.autocorrect = 'off';
+  input.spellcheck = false;
+  input.inputMode = 'latin';
+  input.maxLength = 1;
+  input.pattern = '[A-Za-z]*';
+  input.tabIndex = -1;
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  input.style.pointerEvents = 'none';
+  input.style.left = '0';
+  input.style.top = '0';
+  input.style.width = '1px';
+  input.style.height = '1px';
+  input.style.border = '0';
+  input.style.background = 'transparent';
+  input.style.color = 'transparent';
+  input.style.caretColor = 'transparent';
+  input.style.fontSize = '16px';
+  input.style.zIndex = '1000';
+  document.body.appendChild(input);
+  this.mobileInput = input;
+  this.mobileFocusPending = false;
+
+  const handleInput = (event) => {
+    const value = (event.target.value || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+    if (!value) {
+      if (this.selectedCell && !this.selectedCell.filled) {
+        this.selectedCell.letterText.setText('');
+      }
+      return;
+    }
+    const letter = value.slice(-1);
+    event.target.value = letter;
+    handleLetter(letter).catch((err) => console.error('Mobile letter handler error:', err));
+  };
+
+  const handleKeydown = (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleEnter().catch((err) => console.error('Mobile enter handler error:', err));
+    } else if (event.key === 'Backspace') {
+      event.preventDefault();
+      event.stopPropagation();
+      event.target.value = '';
+      if (this.selectedCell && !this.selectedCell.filled) {
+        this.selectedCell.letterText.setText('');
+      }
+    }
+  };
+
+  input.addEventListener('input', handleInput);
+  input.addEventListener('keydown', handleKeydown);
+
+  if (!this.mobileTouchFocusHandler) {
+    this.mobileTouchFocusHandler = () => {
+      if (!this.mobileFocusPending) return;
+      this.focusMobileLetterField();
+    };
+    this.mobileTouchFocusTarget = window;
+    this.mobileTouchFocusTarget.addEventListener('touchend', this.mobileTouchFocusHandler, { passive: true });
+    this.mobileTouchFocusTarget.addEventListener('pointerup', this.mobileTouchFocusHandler, { passive: true });
+  }
+
+  const cleanup = () => {
+    input.removeEventListener('input', handleInput);
+    input.removeEventListener('keydown', handleKeydown);
+    if (this.mobileTouchFocusHandler && this.mobileTouchFocusTarget) {
+      this.mobileTouchFocusTarget.removeEventListener('touchend', this.mobileTouchFocusHandler);
+      this.mobileTouchFocusTarget.removeEventListener('pointerup', this.mobileTouchFocusHandler);
+      this.mobileTouchFocusHandler = null;
+      this.mobileTouchFocusTarget = null;
+    }
+    if (input.parentNode) {
+      input.parentNode.removeChild(input);
+    }
+    if (this.mobileInput === input) {
+      this.mobileInput = null;
+    }
+  };
+
+  this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+  this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
+}
+
+focusMobileLetterField() {
+  if (!this.isMobile || !this.mobileInput) return;
+  const target = this.mobileInput;
+  target.value = '';
+  const attemptFocus = () => {
+    if (!this.mobileInput || target !== this.mobileInput) return false;
+    try {
+      target.focus({ preventScroll: true });
+    } catch {
+      target.focus();
+    }
+    return document.activeElement === target;
+  };
+  const immediate = attemptFocus();
+  if (immediate) {
+    this.mobileFocusPending = false;
+    return;
+  }
+  setTimeout(() => {
+    if (attemptFocus()) {
+      this.mobileFocusPending = false;
+    }
+  }, 0);
+}
+
+blurMobileLetterField() {
+  if (!this.isMobile || !this.mobileInput) return;
+  this.mobileInput.blur();
+  this.mobileInput.value = '';
+  this.mobileFocusPending = false;
 }
 
 /**
@@ -535,7 +711,7 @@ finishRound() {
   this.turnPhase = "BUSY";
   this.updateNextLetterUI(false);
   this.clearSelectionState();
-  this.turnText.setText("Board complete! Final score coming up...");
+  this.setInstructionText("Board complete! Final score coming up...");
 
   const summaryWords = this.collectSummaryWords();
   const boardSnapshot = this.captureBoardSnapshot();
@@ -551,10 +727,10 @@ finishRound() {
 
 
 
-  // ======================================================
-  // ===============   SCORING & HELPERS  ================
-  // ======================================================
-  
+  // ======================================================
+  // ===============   SCORING & HELPERS  ================
+  // ======================================================
+  
   async recomputeRow(r) {
     const word = this.buildRowWord(r);
     const result = await this.scoreWord(word);
@@ -740,17 +916,17 @@ finishRound() {
     });
     return results;
   }
-  
-  findCell(cellToFind) {
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
-        if (this.grid[r][c] === cellToFind) {
-          return [r, c];
-        }
-      }
-    }
-    return null;
-  }
+  
+  findCell(cellToFind) {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        if (this.grid[r][c] === cellToFind) {
+          return [r, c];
+        }
+      }
+    }
+    return null;
+  }
 
   async adjudicatePlacement(cell) {
     const pos = this.findCell(cell);
@@ -762,62 +938,66 @@ finishRound() {
     
     let newScore = 0;
     this.rowScores.forEach(s => newScore += s);
-    this.colScores.forEach(s => newScore += s);
-    this.score = newScore;
-    
-    this.scoreText.setText(`Score: ${this.score}`);
-  }
+    this.colScores.forEach(s => newScore += s);
+    this.score = newScore;
+    
+    this.scoreText.setText(`Score: ${this.score}`);
+  }
 
-  // ======================================================
-  // ===============   UI & LETTER PICKERS  ==============
-  // ======================================================
+  // ======================================================
+  // ===============   UI & LETTER PICKERS  ==============
+  // ======================================================
 
-  updateNextLetterUI(visible = true) {
-    if (!this.nextLetterText) return;
-    this.nextLetterText.setText(visible ? this.currentLetter : "");
-  }
+  updateNextLetterUI(visible = true) {
+    if (!this.nextLetterText) return;
+    this.nextLetterText.setText(visible ? this.currentLetter : "");
+  }
 
-  /**
-   * Clears only the selection *state* (highlight and variable).
-   * Does NOT clear temporary text.
-   */
-  clearSelectionState() {
-    if (this.selectedCell) {
-      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
-      this.selectedCell = null;
-    }
-  }
-
-  /**
-   * Cancels a selection (on ESCAPE).
-   * This DOES clear temporary text.
-   */
-  cancelSelection() {
-    if (this.selectedCell) {
-      if (!this.selectedCell.filled) {
-        this.selectedCell.letterText.setText('');
-      }
-      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
-      this.selectedCell = null;
-    }
-  }
-
-  /**
-   * Highlights a new cell and cleans up the previous one.
-   */
-  highlightSelectedCell(row, col) {
-    // 1. Clean up the OLD cell
-  if (this.selectedCell) {
+  /**
+   * Clears only the selection *state* (highlight and variable).
+   * Does NOT clear temporary text.
+   */
+  clearSelectionState() {
+  if (this.selectedCell) {
+    this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
+    this.selectedCell = null;
+  }
+  if (this.isMobile) {
+    this.blurMobileLetterField();
+  }
+}
+/**
+   * Cancels a selection (on ESCAPE).
+   * This DOES clear temporary text.
+   */
+  cancelSelection() {
+  if (this.selectedCell) {
+    if (!this.selectedCell.filled) {
+      this.selectedCell.letterText.setText('');
+    }
+    this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
+    this.selectedCell = null;
+  }
+  if (this.isMobile) {
+    this.blurMobileLetterField();
+  }
+}
+/**
+   * Highlights a new cell and cleans up the previous one.
+   */
+  highlightSelectedCell(row, col) {
+    // 1. Clean up the OLD cell
+  if (this.selectedCell) {
   this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
-  // Only clear if it’s blank AND not finalized
+  // Only clear if it€™s blank AND not finalized
   if (!this.selectedCell.filled && this.selectedCell.letterText.text === '') {
     this.selectedCell.letterText.setText('');
   }
 }
 
 
-    // 2. Set the NEW cell
-    const cell = this.grid[row][col];
+    // 2. Set the NEW cell
+    const cell = this.grid[row][col];
     // use a different highlight color for swapping (occupied cell)
     if (cell.filled) {
       cell.highlightRect.setFillStyle(HIGHLIGHT_FILLED, 0.55);
@@ -825,6 +1005,10 @@ finishRound() {
       cell.highlightRect.setFillStyle(HIGHLIGHT_EMPTY, 0.35);
     }
     this.selectedCell = cell;
+    if (this.isMobile) {
+      this.mobileFocusPending = true;
+      this.focusMobileLetterField();
+    }
   }
 
   updateSwapIndicators() {
@@ -839,37 +1023,37 @@ finishRound() {
     }
   }
 
-  weightedPick(list) {
-    if (typeof list === "string") list = list.split("");
-    return list[Math.floor(Math.random() * list.length)];
-  }
+  weightedPick(list) {
+    if (typeof list === "string") list = list.split("");
+    return list[Math.floor(Math.random() * list.length)];
+  }
 
-  getVowelRatio() {
-    let letters = [];
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
-        const ch = this.grid[r][c]?.letterText?.text || "";
-        if (ch) letters.push(ch);
-      }
-    }
-    if (!letters.length) return 0.4;
-    return letters.filter(l => vowels.includes(l)).length / letters.length;
-  }
+  getVowelRatio() {
+    let letters = [];
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const ch = this.grid[r][c]?.letterText?.text || "";
+        if (ch) letters.push(ch);
+      }
+    }
+    if (!letters.length) return 0.4;
+    return letters.filter(l => vowels.includes(l)).length / letters.length;
+  }
 
-  pickNextLetter() {
-    const useBigram = Math.random() < 0.7;
-    const v = this.getVowelRatio();
-    
-    if (v < 0.35 && Math.random() < 0.4) {
-      return this.weightedPick(vowels);
-    }
-    if (v > 0.55 && Math.random() < 0.4) {
-      return this.weightedPick(consonants);
-    }
-    
-    const opts = bigramMap[this.currentLetter];
-    return (useBigram && opts) ? this.weightedPick(opts) : this.weightedPick(weightedLetters);
-  }
+  pickNextLetter() {
+    const useBigram = Math.random() < 0.7;
+    const v = this.getVowelRatio();
+    
+    if (v < 0.35 && Math.random() < 0.4) {
+      return this.weightedPick(vowels);
+    }
+    if (v > 0.55 && Math.random() < 0.4) {
+      return this.weightedPick(consonants);
+    }
+    
+    const opts = bigramMap[this.currentLetter];
+    return (useBigram && opts) ? this.weightedPick(opts) : this.weightedPick(weightedLetters);
+  }
 } // <-- END OF MainScene CLASS
 
 
@@ -1144,7 +1328,7 @@ class SummaryScene extends Phaser.Scene {
 
   buildColorShareString(boardSnapshot = [], score) {
     if (!boardSnapshot.length) return '';
-    const map = { row: '🟨', col: '🟦', both: '🟩', none: '⬛' };
+    const map = { row: 'ðŸŸ¨', col: 'ðŸŸ¦', both: 'ðŸŸ©', none: '¬›' };
     const pictogram = boardSnapshot
       .map((row) =>
         row
@@ -1240,16 +1424,16 @@ class LeaderboardScene extends Phaser.Scene {
     const cardWidth  = Math.min(480, width * 0.82);
     const cardHeight = Math.min(600, height * 0.84);
 
-    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.55);
-    this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0x1a1a1a)
-      .setStrokeStyle(3, 0x555555)
-      .setOrigin(0.5);
+    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.55);
+    this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0x1a1a1a)
+      .setStrokeStyle(3, 0x555555)
+      .setOrigin(0.5);
 
-    this.add.text(centerX, centerY - cardHeight / 2 + 50, 'Leaderboard', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '28px',
-      color: LIGHT_TEXT
-    }).setOrigin(0.5);
+    this.add.text(centerX, centerY - cardHeight / 2 + 50, 'Leaderboard', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '28px',
+      color: LIGHT_TEXT
+    }).setOrigin(0.5);
 
     const { data: allTime = [] } = await supabase
       .from('scores')
@@ -1278,44 +1462,44 @@ class LeaderboardScene extends Phaser.Scene {
       .order('score', { ascending: false })
       .limit(5);
 
-    const sectionY1 = centerY - cardHeight / 2 + 100;
-    const sectionY2 = sectionY1 + 190;
+    const sectionY1 = centerY - cardHeight / 2 + 100;
+    const sectionY2 = sectionY1 + 190;
 
-    this.add.text(centerX, sectionY1, 'Top 5 All-Time', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '18px',
-      color: '#dcdcdc'
-    }).setOrigin(0.5);
-    this.add.text(centerX, sectionY2, 'Top 5 This Week', {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '18px',
-      color: '#dcdcdc'
-    }).setOrigin(0.5);
+    this.add.text(centerX, sectionY1, 'Top 5 All-Time', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '18px',
+      color: '#dcdcdc'
+    }).setOrigin(0.5);
+    this.add.text(centerX, sectionY2, 'Top 5 This Week', {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '18px',
+      color: '#dcdcdc'
+    }).setOrigin(0.5);
 
-    const renderList = (list, startY) => {
-      if (!list || !list.length) {
-        this.add.text(centerX, startY + 45, 'No scores yet', {
-          fontFamily: 'Verdana, sans-serif',
-          fontSize: '16px',
-          color: '#aaaaaa'
-        }).setOrigin(0.5);
-        return;
-      }
+    const renderList = (list, startY) => {
+      if (!list || !list.length) {
+        this.add.text(centerX, startY + 45, 'No scores yet', {
+          fontFamily: 'Verdana, sans-serif',
+          fontSize: '16px',
+          color: '#aaaaaa'
+        }).setOrigin(0.5);
+        return;
+      }
 
-      let y = startY + 25;
-      list.forEach((s, i) => {
-        const date = s.created_at
-          ? new Date(s.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })
-          : '--';
-        this.add.text(centerX - cardWidth / 2 + 40, y, `${i + 1}. ${s.name || 'Anonymous'}`, { fontSize: '18px', color: LIGHT_TEXT });
-        this.add.text(centerX + cardWidth / 2 - 100, y, `${s.score}`, { fontSize: '18px', color: LIGHT_TEXT }).setOrigin(1, 0);
-        this.add.text(centerX + cardWidth / 2 - 40, y, date, { fontSize: '16px', color: '#bbbbbb' }).setOrigin(1, 0);
-        y += 26;
-      });
+      let y = startY + 25;
+      list.forEach((s, i) => {
+        const date = s.created_at
+          ? new Date(s.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })
+          : '--';
+        this.add.text(centerX - cardWidth / 2 + 40, y, `${i + 1}. ${s.name || 'Anonymous'}`, { fontSize: '18px', color: LIGHT_TEXT });
+        this.add.text(centerX + cardWidth / 2 - 100, y, `${s.score}`, { fontSize: '18px', color: LIGHT_TEXT }).setOrigin(1, 0);
+        this.add.text(centerX + cardWidth / 2 - 40, y, date, { fontSize: '16px', color: '#bbbbbb' }).setOrigin(1, 0);
+        y += 26;
+      });
     };
 
-    renderList(allTime, sectionY1);
-    renderList(weekly, sectionY2);
+    renderList(allTime, sectionY1);
+    renderList(weekly, sectionY2);
 
     const buttonBaseY = centerY + cardHeight / 2 - 70;
     const buttonWidth = 190;
@@ -1487,24 +1671,31 @@ class NameEntryScene extends Phaser.Scene {
 // --- The MainScene's create() method handles all resets. ---
 
 function launchGame() {
-  const game = new Phaser.Game({
-    ...gameConfig,
-    scene: [MainScene, NameEntryScene, SummaryScene, LeaderboardScene]
-  });
+  const game = new Phaser.Game({
+    ...gameConfig,
+    scene: [MainScene, NameEntryScene, SummaryScene, LeaderboardScene]
+  });
 
-  setTimeout(() => {
-    game.scale.resize(window.innerWidth, window.innerHeight);
-  }, 250);
+  setTimeout(() => {
+    game.scale.resize(window.innerWidth, window.innerHeight);
+  }, 250);
 
-  window.addEventListener("resize", () => {
-    if (game && game.scale) {
-      game.scale.resize(window.innerWidth, window.innerHeight);
-    }
-  });
+  window.addEventListener("resize", () => {
+    if (game && game.scale) {
+      game.scale.resize(window.innerWidth, window.innerHeight);
+    }
+  });
 }
 
 if (document.readyState === "complete") {
-  launchGame();
+  launchGame();
 } else {
-  window.addEventListener("load", launchGame);
+  window.addEventListener("load", launchGame);
 }
+
+
+
+
+
+
+
