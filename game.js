@@ -175,7 +175,7 @@ class MainScene extends Phaser.Scene {
     const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
     const gridPixelWidth = GRID_SIZE * CELL_SIZE;
     const instructionWidth = gridPixelWidth - 24;
-    const instructionBaseline = Math.max(40, GRID_TOP - 16);
+    const instructionBaseline = Math.max(uiY + 110, GRID_TOP - 16);
     // Removed "On Deck" label; nextLetterBox displays current CPU letter.
     this.nextLetterBox = this.add.rectangle(gridCenterX, uiY, 80, 80, 0x1c1c1c, 1)
       .setStrokeStyle(3, 0x555555)
@@ -297,7 +297,7 @@ class MainScene extends Phaser.Scene {
 
     // --- 10. Setup Input and Start Game ---
     this.setupKeyboardInput();
-    this.initMobileKeyboardBridge();
+    this.createMobileKeyboard();
     this.startCpuTurn();
   }
 
@@ -388,7 +388,7 @@ startPlayerTurn() {
   this.currentLetter = ""; // clear CPU letter
   this.updateNextLetterUI(false);
   if (this.isMobile) {
-    this.turnText.setText("Your turn: pick an empty square (or occupied to swap), type a letter, then press Enter.");
+    this.turnText.setText("Your turn: tap a square (or occupied to swap), then pick a letter below to lock it in.");
   } else {
     this.turnText.setText("Your turn: pick a square (or occupied to swap), then press a letter key to place it.");
   }
@@ -410,7 +410,8 @@ handlePlayerClick(row, col) {
   }
   this.highlightSelectedCell(row, col);
   if (this.isMobile) {
-    this.focusMobileInput();
+    this.showMobileKeyboard();
+    window.requestAnimationFrame(() => window.scrollTo(0, 0));
   }
 }
 
@@ -478,23 +479,16 @@ async finalizePlayerLetter(cell) {
     // Only accept single-letter keys A-Z
     if (/^[a-zA-Z]$/.test(raw)) {
       this.selectedCell.letterText.setText(k);
-      // On desktop, auto-finalize for convenience; on mobile, require Enter
-      if (!this.isMobile) {
-        console.log('[KEY] letter typed — auto-finalizing', { k });
-        try {
-          this.turnPhase = "BUSY";
-          const cellToFinalize = this.selectedCell;
-          await this.finalizePlayerLetter(cellToFinalize);
-          this.clearSelectionState();
-        } catch (err) {
-          console.error('Error auto-finalizing letter:', err);
-        }
-        return;
-      } else {
-        // On mobile, let the user press Enter to confirm
-        console.log('[KEY] letter typed (mobile) — waiting for Enter', { k });
-        return;
+      console.log('[KEY] letter typed – auto-finalizing', { k });
+      try {
+        this.turnPhase = "BUSY";
+        const cellToFinalize = this.selectedCell;
+        await this.finalizePlayerLetter(cellToFinalize);
+        this.clearSelectionState();
+      } catch (err) {
+        console.error('Error auto-finalizing letter:', err);
       }
+      return;
     }
 
     if (k === "ENTER" && this.selectedCell?.letterText.text) {
@@ -513,101 +507,95 @@ async finalizePlayerLetter(cell) {
 }
 
   /**
-   * Creates a hidden input so mobile browsers can show a keyboard on demand.
+   * Builds a lightweight on-screen keyboard for mobile users.
    */
-  initMobileKeyboardBridge() {
-    if (!this.isMobile || this.mobileInput) return;
+  createMobileKeyboard() {
+    if (!this.isMobile || this.mobileKeyboard) return;
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.maxLength = 1;
-    input.inputMode = 'text';
-    input.autocapitalize = 'characters';
-    input.autocomplete = 'off';
-    input.spellcheck = false;
-    input.style.position = 'fixed';
-    input.style.left = '50%';
-    input.style.bottom = '0';
-    input.style.transform = 'translateX(-50%)';
-    input.style.opacity = '0';
-    input.style.height = '1px';
-    input.style.width = '1px';
-    input.style.border = 'none';
-    input.style.background = 'transparent';
-    input.style.color = 'transparent';
-    input.style.caretColor = 'transparent';
-    input.style.pointerEvents = 'none';
-    input.style.zIndex = '1000';
-    document.body.appendChild(input);
+    const container = document.createElement('div');
+    container.id = 'mobile-letter-keyboard';
+    container.style.position = 'fixed';
+    container.style.left = '50%';
+    container.style.bottom = '12px';
+    container.style.transform = 'translateX(-50%)';
+    container.style.display = 'none';
+    container.style.flexDirection = 'column';
+    container.style.alignItems = 'center';
+    container.style.gap = '8px';
+    container.style.padding = '12px 16px 16px';
+    container.style.borderRadius = '18px';
+    container.style.background = 'rgba(12, 12, 12, 0.96)';
+    container.style.boxShadow = '0 10px 32px rgba(0,0,0,0.6)';
+    container.style.backdropFilter = 'blur(4px)';
+    container.style.zIndex = '2000';
+    container.style.userSelect = 'none';
 
-    const handleInput = (event) => {
-      if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) {
-        input.value = '';
-        return;
-      }
-      const raw = (event.target.value || '').toUpperCase().replace(/[^A-Z]/g, '');
-      input.value = '';
-      if (!raw) return;
-      const letter = raw.slice(-1);
-      this.selectedCell.letterText.setText(letter);
-    };
+    const rows = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+    rows.forEach((row, idx) => {
+      const rowDiv = document.createElement('div');
+      rowDiv.style.display = 'flex';
+      rowDiv.style.justifyContent = 'center';
+      rowDiv.style.gap = '6px';
+      if (idx === 2) rowDiv.style.paddingLeft = '22px';
 
-    const handleKeydown = async (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        if (!this.selectedCell?.letterText.text) return;
-        this.turnPhase = "BUSY";
-        const cellToFinalize = this.selectedCell;
-        await this.finalizePlayerLetter(cellToFinalize);
-        this.clearSelectionState();
-        return;
-      }
+      row.split('').forEach((letter) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = letter;
+        btn.style.width = '38px';
+        btn.style.height = '48px';
+        btn.style.borderRadius = '10px';
+        btn.style.border = '1px solid rgba(255,255,255,0.12)';
+        btn.style.background = 'linear-gradient(180deg, #2f2f2f, #1a1a1a)';
+        btn.style.color = '#f5f5f5';
+        btn.style.fontSize = '18px';
+        btn.style.fontFamily = 'Arial Black, Verdana, sans-serif';
+        btn.style.fontWeight = '600';
+        btn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.45)';
+        btn.style.padding = '0';
+        btn.style.touchAction = 'manipulation';
+        btn.addEventListener('click', () => this.handleMobileLetter(letter));
+        rowDiv.appendChild(btn);
+      });
 
-      if (event.key === 'Backspace') {
-        event.preventDefault();
-        if (this.selectedCell && !this.selectedCell.filled) {
-          this.selectedCell.letterText.setText('');
-        }
-      }
-    };
+      container.appendChild(rowDiv);
+    });
 
-    input.addEventListener('input', handleInput);
-    input.addEventListener('keydown', handleKeydown);
+    document.body.appendChild(container);
+    this.mobileKeyboard = container;
 
-    this.mobileInput = input;
-    this.mobileInputHandlers = { handleInput, handleKeydown };
-
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyMobileInput());
-    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroyMobileInput());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyMobileKeyboard());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroyMobileKeyboard());
   }
 
-  focusMobileInput() {
-    if (!this.isMobile || !this.mobileInput) return;
-    this.mobileInput.value = '';
+  showMobileKeyboard() {
+    if (!this.isMobile || !this.mobileKeyboard) return;
+    this.mobileKeyboard.style.display = 'flex';
+  }
+
+  hideMobileKeyboard() {
+    if (!this.isMobile || !this.mobileKeyboard) return;
+    this.mobileKeyboard.style.display = 'none';
+  }
+
+  async handleMobileLetter(letter) {
+    if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) return;
+    this.selectedCell.letterText.setText(letter);
+    this.hideMobileKeyboard();
     try {
-      this.mobileInput.focus({ preventScroll: true });
+      this.turnPhase = "BUSY";
+      const cellToFinalize = this.selectedCell;
+      await this.finalizePlayerLetter(cellToFinalize);
+      this.clearSelectionState();
     } catch (err) {
-      this.mobileInput.focus();
-    }
-    window.requestAnimationFrame(() => window.scrollTo(0, 0));
-  }
-
-  blurMobileInput() {
-    if (!this.isMobile || !this.mobileInput) return;
-    if (document.activeElement === this.mobileInput) {
-      this.mobileInput.blur();
+      console.error('Error finalizing mobile letter:', err);
     }
   }
 
-  destroyMobileInput() {
-    if (!this.mobileInput) return;
-    if (this.mobileInputHandlers) {
-      this.mobileInput.removeEventListener('input', this.mobileInputHandlers.handleInput);
-      this.mobileInput.removeEventListener('keydown', this.mobileInputHandlers.handleKeydown);
-      this.mobileInputHandlers = null;
-    }
-    this.mobileInput.remove();
-    this.mobileInput = null;
+  destroyMobileKeyboard() {
+    if (!this.mobileKeyboard) return;
+    this.mobileKeyboard.remove();
+    this.mobileKeyboard = null;
   }
 
   /**
@@ -889,9 +877,7 @@ finishRound() {
       this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
       this.selectedCell = null;
     }
-    if (this.isMobile) {
-      this.blurMobileInput();
-    }
+    if (this.isMobile) this.hideMobileKeyboard();
   }
 
   /**
@@ -906,9 +892,7 @@ finishRound() {
       this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
       this.selectedCell = null;
     }
-    if (this.isMobile) {
-      this.blurMobileInput();
-    }
+    if (this.isMobile) this.hideMobileKeyboard();
   }
 
   /**
