@@ -1041,7 +1041,9 @@ class SummaryScene extends Phaser.Scene {
       const cols = boardSnapshot[0]?.length || 0;
       if (!cols) return boardTopY;
 
-      const cellSize = Math.min(22, (cardWidth - 160) / cols, (cardHeight * 0.25) / rows);
+      const availableWidth = Math.max(140, cardWidth - 200);
+      const availableHeight = Math.max(120, cardHeight * 0.22);
+      const cellSize = Math.min(18, availableWidth / cols, availableHeight / rows);
       const boardWidth = cols * cellSize;
       const boardHeight = rows * cellSize;
       const startX = centerX - boardWidth / 2;
@@ -1265,9 +1267,18 @@ class SummaryScene extends Phaser.Scene {
         fontSize: '16px',
         color: LIGHT_TEXT
       }).setOrigin(0.5);
+      text.setInteractive({ useHandCursor: true });
+
+      const invokeHandler = (event) => {
+        event?.stopPropagation?.();
+        handler();
+      };
+
       btn.on('pointerover', () => btn.setFillStyle(0x444444));
       btn.on('pointerout', () => btn.setFillStyle(0x2a2a2a));
-      btn.on('pointerdown', handler);
+      btn.on('pointerdown', invokeHandler);
+      text.on('pointerdown', invokeHandler);
+
       overlay.add(btn);
       overlay.add(text);
 
