@@ -102,15 +102,13 @@ class MainScene extends Phaser.Scene {
     this.currentLetter = '';
     this.swapsUsed = 0;
     this.swapIndicators = [];
-    this.mobileInput = null;
-    this.mobileFocusPending = false;
-    this.mobileTouchFocusHandler = null;
-    this.mobileTouchFocusTarget = null;
     this.gridTop = 0;
     this.instructionBaseY = 0;
     this.instructionMargin = 16;
-  this.isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    this.isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     this.instructionMargin = this.isMobile ? 14 : 20;
+    this.mobileLetterPad = null;
+    this.mobilePadVisible = false;
     this.turnPhase = 'CPU_TURN'; // 'CPU_TURN' | 'PLAYER_TURN' | 'BUSY'
     this.selectedCell = null; 
     this.gameFinished = false;
@@ -505,19 +503,14 @@ setupKeyboardInput() {
   const handleLetter = async (letter) => {
     if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) return;
     this.selectedCell.letterText.setText(letter);
-    if (!this.isMobile) {
-      console.log('[KEY] letter typed - auto-finalizing', { letter });
-      try {
-        this.turnPhase = "BUSY";
-        const cellToFinalize = this.selectedCell;
-        await this.finalizePlayerLetter(cellToFinalize);
-        this.clearSelectionState();
-      } catch (err) {
-        console.error('Error auto-finalizing letter:', err);
-      }
-    } else {
-      // On mobile, let the user press Enter to confirm
-      console.log('[KEY] letter typed (mobile) - waiting for Enter', { letter });
+    console.log(`[KEY] letter typed${this.isMobile ? ' (mobile)' : ''} - auto-finalizing`, { letter });
+    try {
+      this.turnPhase = "BUSY";
+      const cellToFinalize = this.selectedCell;
+      await this.finalizePlayerLetter(cellToFinalize);
+      this.clearSelectionState();
+    } catch (err) {
+      console.error('Error auto-finalizing letter:', err);
     }
   };
 
@@ -554,130 +547,103 @@ setupKeyboardInput() {
   });
 
   if (this.isMobile) {
-    this.setupMobileKeyboardBridge(handleLetter, handleEnter);
+    this.setupMobileLetterPad(handleLetter);
   }
 }
 
-setupMobileKeyboardBridge(handleLetter, handleEnter) {
-  if (this.mobileInput) return;
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.autocapitalize = 'characters';
-  input.autocomplete = 'off';
-  input.autocorrect = 'off';
-  input.spellcheck = false;
-  input.inputMode = 'latin';
-  input.maxLength = 1;
-  input.pattern = '[A-Za-z]*';
-  input.tabIndex = -1;
-  input.style.position = 'fixed';
-  input.style.opacity = '0';
-  input.style.pointerEvents = 'none';
-  input.style.left = '0';
-  input.style.top = '0';
-  input.style.width = '1px';
-  input.style.height = '1px';
-  input.style.border = '0';
-  input.style.background = 'transparent';
-  input.style.color = 'transparent';
-  input.style.caretColor = 'transparent';
-  input.style.fontSize = '16px';
-  input.style.zIndex = '1000';
-  document.body.appendChild(input);
-  this.mobileInput = input;
-  this.mobileFocusPending = false;
+setupMobileLetterPad(handleLetter) {
+  if (this.mobileLetterPad) return;
+  const wrapper = document.createElement('div');
+  Object.assign(wrapper.style, {
+    position: 'fixed',
+    left: '50%',
+    bottom: '12px',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '12px 14px 16px',
+    background: 'rgba(6, 6, 6, 0.92)',
+    borderRadius: '18px',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
+    zIndex: '2000',
+    opacity: '0',
+    pointerEvents: 'none',
+    transition: 'opacity 0.18s ease',
+    maxWidth: '96vw'
+  });
 
-  const handleInput = (event) => {
-    const value = (event.target.value || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
-    if (!value) {
-      if (this.selectedCell && !this.selectedCell.filled) {
-        this.selectedCell.letterText.setText('');
-      }
-      return;
-    }
-    const letter = value.slice(-1);
-    event.target.value = letter;
-    handleLetter(letter).catch((err) => console.error('Mobile letter handler error:', err));
-  };
+  const label = document.createElement('div');
+  label.textContent = 'Tap a letter';
+  Object.assign(label.style, {
+    fontFamily: 'Arial Black, Verdana, sans-serif',
+    fontSize: '14px',
+    letterSpacing: '0.04em',
+    color: '#f4f4f4',
+    textTransform: 'uppercase'
+  });
 
-  const handleKeydown = (event) => {
-    if (event.key === 'Enter') {
+  const grid = document.createElement('div');
+  Object.assign(grid.style, {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, minmax(38px, 1fr))',
+    gap: '6px',
+    width: '100%'
+  });
+
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  letters.forEach((letter) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = letter;
+    Object.assign(button.style, {
+      fontFamily: 'Arial Black, Verdana, sans-serif',
+      fontSize: '16px',
+      color: '#f4f4f4',
+      background: '#2b2b2b',
+      border: '1px solid #555555',
+      borderRadius: '8px',
+      padding: '10px 4px',
+      textTransform: 'uppercase',
+      cursor: 'pointer',
+      touchAction: 'manipulation'
+    });
+    button.addEventListener('click', (event) => {
       event.preventDefault();
-      handleEnter().catch((err) => console.error('Mobile enter handler error:', err));
-    } else if (event.key === 'Backspace') {
-      event.preventDefault();
-      event.stopPropagation();
-      event.target.value = '';
-      if (this.selectedCell && !this.selectedCell.filled) {
-        this.selectedCell.letterText.setText('');
-      }
-    }
-  };
+      handleLetter(letter).catch((err) => console.error('Mobile letter tap error:', err));
+    });
+    grid.appendChild(button);
+  });
 
-  input.addEventListener('input', handleInput);
-  input.addEventListener('keydown', handleKeydown);
-
-  if (!this.mobileTouchFocusHandler) {
-    this.mobileTouchFocusHandler = () => {
-      if (!this.mobileFocusPending) return;
-      this.focusMobileLetterField();
-    };
-    this.mobileTouchFocusTarget = window;
-    this.mobileTouchFocusTarget.addEventListener('touchend', this.mobileTouchFocusHandler, { passive: true });
-    this.mobileTouchFocusTarget.addEventListener('pointerup', this.mobileTouchFocusHandler, { passive: true });
-  }
+  wrapper.appendChild(label);
+  wrapper.appendChild(grid);
+  document.body.appendChild(wrapper);
+  this.mobileLetterPad = wrapper;
 
   const cleanup = () => {
-    input.removeEventListener('input', handleInput);
-    input.removeEventListener('keydown', handleKeydown);
-    if (this.mobileTouchFocusHandler && this.mobileTouchFocusTarget) {
-      this.mobileTouchFocusTarget.removeEventListener('touchend', this.mobileTouchFocusHandler);
-      this.mobileTouchFocusTarget.removeEventListener('pointerup', this.mobileTouchFocusHandler);
-      this.mobileTouchFocusHandler = null;
-      this.mobileTouchFocusTarget = null;
+    if (wrapper.parentNode) {
+      wrapper.parentNode.removeChild(wrapper);
     }
-    if (input.parentNode) {
-      input.parentNode.removeChild(input);
-    }
-    if (this.mobileInput === input) {
-      this.mobileInput = null;
-    }
+    this.mobileLetterPad = null;
   };
 
   this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
   this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
 }
 
-focusMobileLetterField() {
-  if (!this.isMobile || !this.mobileInput) return;
-  const target = this.mobileInput;
-  target.value = '';
-  const attemptFocus = () => {
-    if (!this.mobileInput || target !== this.mobileInput) return false;
-    try {
-      target.focus({ preventScroll: true });
-    } catch {
-      target.focus();
-    }
-    return document.activeElement === target;
-  };
-  const immediate = attemptFocus();
-  if (immediate) {
-    this.mobileFocusPending = false;
-    return;
-  }
-  setTimeout(() => {
-    if (attemptFocus()) {
-      this.mobileFocusPending = false;
-    }
-  }, 0);
+showMobileLetterPad() {
+  if (!this.isMobile || !this.mobileLetterPad || this.mobilePadVisible) return;
+  this.mobileLetterPad.style.opacity = '1';
+  this.mobileLetterPad.style.pointerEvents = 'auto';
+  this.mobilePadVisible = true;
 }
 
-blurMobileLetterField() {
-  if (!this.isMobile || !this.mobileInput) return;
-  this.mobileInput.blur();
-  this.mobileInput.value = '';
-  this.mobileFocusPending = false;
+hideMobileLetterPad() {
+  if (!this.isMobile || !this.mobileLetterPad || !this.mobilePadVisible) return;
+  this.mobileLetterPad.style.opacity = '0';
+  this.mobileLetterPad.style.pointerEvents = 'none';
+  this.mobilePadVisible = false;
 }
 
 /**
@@ -958,43 +924,42 @@ finishRound() {
    * Does NOT clear temporary text.
    */
   clearSelectionState() {
-  if (this.selectedCell) {
-    this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
-    this.selectedCell = null;
+    if (this.selectedCell) {
+      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
+      this.selectedCell = null;
+    }
+    if (this.isMobile) {
+      this.hideMobileLetterPad();
+    }
   }
-  if (this.isMobile) {
-    this.blurMobileLetterField();
-  }
-}
 /**
    * Cancels a selection (on ESCAPE).
    * This DOES clear temporary text.
    */
   cancelSelection() {
-  if (this.selectedCell) {
-    if (!this.selectedCell.filled) {
-      this.selectedCell.letterText.setText('');
+    if (this.selectedCell) {
+      if (!this.selectedCell.filled) {
+        this.selectedCell.letterText.setText('');
+      }
+      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
+      this.selectedCell = null;
     }
-    this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
-    this.selectedCell = null;
+    if (this.isMobile) {
+      this.hideMobileLetterPad();
+    }
   }
-  if (this.isMobile) {
-    this.blurMobileLetterField();
-  }
-}
 /**
    * Highlights a new cell and cleans up the previous one.
    */
   highlightSelectedCell(row, col) {
     // 1. Clean up the OLD cell
-  if (this.selectedCell) {
-  this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
-  // Only clear if it€™s blank AND not finalized
-  if (!this.selectedCell.filled && this.selectedCell.letterText.text === '') {
-    this.selectedCell.letterText.setText('');
-  }
-}
-
+    if (this.selectedCell) {
+      this.selectedCell.highlightRect.setFillStyle(0xffffff, 0);
+      // Only clear if it's blank AND not finalized
+      if (!this.selectedCell.filled && this.selectedCell.letterText.text === '') {
+        this.selectedCell.letterText.setText('');
+      }
+    }
 
     // 2. Set the NEW cell
     const cell = this.grid[row][col];
@@ -1006,8 +971,7 @@ finishRound() {
     }
     this.selectedCell = cell;
     if (this.isMobile) {
-      this.mobileFocusPending = true;
-      this.focusMobileLetterField();
+      this.showMobileLetterPad();
     }
   }
 
