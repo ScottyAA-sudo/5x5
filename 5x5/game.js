@@ -103,6 +103,9 @@ class MainScene extends Phaser.Scene {
     this.swapsUsed = 0;
     this.swapIndicators = [];
     this.mobileInput = null;
+    this.mobileFocusPending = false;
+    this.mobileTouchFocusHandler = null;
+    this.mobileTouchFocusTarget = null;
   this.isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     this.turnPhase = 'CPU_TURN'; // 'CPU_TURN' | 'PLAYER_TURN' | 'BUSY'
     this.selectedCell = null; 
@@ -529,16 +532,22 @@ setupMobileKeyboardBridge(handleLetter, handleEnter) {
   input.maxLength = 1;
   input.pattern = '[A-Za-z]*';
   input.tabIndex = -1;
-  input.style.position = 'absolute';
+  input.style.position = 'fixed';
   input.style.opacity = '0';
   input.style.pointerEvents = 'none';
-  input.style.left = '-9999px';
+  input.style.left = '0';
   input.style.top = '0';
   input.style.width = '1px';
   input.style.height = '1px';
+  input.style.border = '0';
+  input.style.background = 'transparent';
+  input.style.color = 'transparent';
+  input.style.caretColor = 'transparent';
   input.style.fontSize = '16px';
+  input.style.zIndex = '1000';
   document.body.appendChild(input);
   this.mobileInput = input;
+  this.mobileFocusPending = false;
 
   const handleInput = (event) => {
     const value = (event.target.value || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
@@ -570,9 +579,26 @@ setupMobileKeyboardBridge(handleLetter, handleEnter) {
   input.addEventListener('input', handleInput);
   input.addEventListener('keydown', handleKeydown);
 
+  if (!this.mobileTouchFocusHandler) {
+    this.mobileTouchFocusHandler = () => {
+      if (!this.mobileFocusPending) return;
+      this.mobileFocusPending = false;
+      this.focusMobileLetterField();
+    };
+    this.mobileTouchFocusTarget = window;
+    this.mobileTouchFocusTarget.addEventListener('touchend', this.mobileTouchFocusHandler, { passive: true });
+    this.mobileTouchFocusTarget.addEventListener('pointerup', this.mobileTouchFocusHandler, { passive: true });
+  }
+
   const cleanup = () => {
     input.removeEventListener('input', handleInput);
     input.removeEventListener('keydown', handleKeydown);
+    if (this.mobileTouchFocusHandler && this.mobileTouchFocusTarget) {
+      this.mobileTouchFocusTarget.removeEventListener('touchend', this.mobileTouchFocusHandler);
+      this.mobileTouchFocusTarget.removeEventListener('pointerup', this.mobileTouchFocusHandler);
+      this.mobileTouchFocusHandler = null;
+      this.mobileTouchFocusTarget = null;
+    }
     if (input.parentNode) {
       input.parentNode.removeChild(input);
     }
@@ -587,6 +613,7 @@ setupMobileKeyboardBridge(handleLetter, handleEnter) {
 
 focusMobileLetterField() {
   if (!this.isMobile || !this.mobileInput) return;
+  this.mobileFocusPending = false;
   this.mobileInput.value = '';
   const target = this.mobileInput;
   const focus = () => {
@@ -605,6 +632,7 @@ blurMobileLetterField() {
   if (!this.isMobile || !this.mobileInput) return;
   this.mobileInput.blur();
   this.mobileInput.value = '';
+  this.mobileFocusPending = false;
 }
 
 /**
@@ -933,6 +961,7 @@ finishRound() {
     }
     this.selectedCell = cell;
     if (this.isMobile) {
+      this.mobileFocusPending = true;
       this.focusMobileLetterField();
     }
   }
