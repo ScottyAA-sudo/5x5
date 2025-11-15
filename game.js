@@ -1,4 +1,4 @@
-// ===================== Supabase =====================
+﻿// ===================== Supabase =====================
 const supabase = window.supabase.createClient(
   "https://bztovbzqubypgdskypjt.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6dG92YnpxdWJ5cGdkc2t5cGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyODM2NTIsImV4cCI6MjA3NDg1OTY1Mn0.DkWqGmN0B-9AUj7kr6B11hhhnB0b2BKFpOsnrixFNQU"
@@ -275,23 +275,24 @@ class MainScene extends Phaser.Scene {
       this.add.rectangle(boxX, boxY + boxHeight / 2, boxWidth, boxHeight, 0x1b1b1b, 0.95).setStrokeStyle(2, 0x444444).setOrigin(0.5).setDepth(0);
       const title = this.add.text(boxX, 0, '3-letter words = 5 pts | 4-letter = 15 pts | 5-letter = 25 pts', {
         fontFamily: 'Arial Black, Verdana, sans-serif',
-        fontSize: '12px',
+        fontSize: '13px',
         color: '#dddddd',
       }).setOrigin(0.5, 0);
       const rules = [
-        '- Words must start from the top row or left column',
-        '- You can make 3 "swaps" overwriting a placed letter',
-        '- The game ends when all letters have been placed',
+        '- Words must start in the top row or left column',
+        '- You can make 3 "swaps" overwriting a letter',
+        '- Game ends when all letters are placed',
       ];
       const titleHeight = 18;
-      const rulesHeight = rules.length * (this.isMobile ? 20 : 22);
+      const rulesHeight = rules.length * 22;
       const legendHeight = 26;
       const totalContentHeight = titleHeight + rulesHeight + legendHeight + 40;
       const startY = boxY + (boxHeight - totalContentHeight) / 2;
       title.setY(startY);
       let textY = startY + titleHeight + 8;
-      const ruleFontSize = this.isMobile ? '13px' : '14px';
-      const wrapPadding = this.isMobile ? 40 : 60;
+      const ruleFontSize = this.isMobile ? '14px' : '14px';
+      const wrapPadding = this.isMobile ? 24 : 60;
+      const lineAdvance = 22;
       rules.forEach((line) => {
         this.add.text(boxX, textY, line, {
           fontFamily: 'Verdana, sans-serif',
@@ -300,7 +301,7 @@ class MainScene extends Phaser.Scene {
           align: 'center',
           wordWrap: { width: boxWidth - wrapPadding },
         }).setOrigin(0.5, 0);
-        textY += 22;
+        textY += lineAdvance;
       });
       this.add.line(boxX, textY + 6, boxX - boxWidth / 2 + 10, textY + 6, boxX + boxWidth / 2 - 10, textY + 6, 0x444444).setOrigin(0.5, 0).setLineWidth(1);
       const legendY = textY + 28;
@@ -310,7 +311,7 @@ class MainScene extends Phaser.Scene {
         rect.setStrokeStyle(1, 0x666666, 0.9);
         this.add.text(boxX + offsetX + 16, legendY, label, {
           fontFamily: 'Verdana, sans-serif',
-          fontSize: '14px',
+          fontSize: '15px',
           color: '#dddddd',
         }).setOrigin(0, 0.5);
       };
