@@ -559,6 +559,7 @@ setupMobileLetterPad(handleLetter) {
     left: '0',
     right: '0',
     bottom: '0',
+    boxSizing: 'border-box',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -599,6 +600,7 @@ setupMobileLetterPad(handleLetter) {
   rows.forEach((rowLetters, rowIndex) => {
     const row = document.createElement('div');
     Object.assign(row.style, {
+      boxSizing: 'border-box',
       display: 'grid',
       gridTemplateColumns: `repeat(${rowLetters.length}, minmax(0, 1fr))`,
       gap: '6px',
