@@ -1,12 +1,21 @@
-﻿// ===================== Supabase =====================
+// ===================== Supabase =====================
 const supabase = window.supabase.createClient(
   "https://bztovbzqubypgdskypjt.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6dG92YnpxdWJ5cGdkc2t5cGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyODM2NTIsImV4cCI6MjA3NDg1OTY1Mn0.DkWqGmN0B-9AUj7kr6B11hhhnB0b2BKFpOsnrixFNQU"
 );
 
-if (screen.orientation && screen.orientation.lock) {
-  screen.orientation.lock('portrait').catch(() => {});
-}
+const lockPortrait = () => {
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('portrait').catch(() => {});
+  }
+};
+
+lockPortrait();
+window.addEventListener('orientationchange', () => {
+  lockPortrait();
+  // Retry shortly after rotation in case the first call is ignored
+  setTimeout(lockPortrait, 250);
+});
 
 // ===================== Game State =====================
 // ===================== Config =====================
@@ -270,24 +279,26 @@ class MainScene extends Phaser.Scene {
         color: '#dddddd',
       }).setOrigin(0.5, 0);
       const rules = [
-        '€¢ Words must start from the top row or far-left column',
-        '€¢ You can make 3 "swaps" overwriting a placed letter',
-        '€¢ The game ends when all letters have been placed',
+        '- Words must start from the top row or left column',
+        '- You can make 3 "swaps" overwriting a placed letter',
+        '- The game ends when all letters have been placed',
       ];
       const titleHeight = 18;
-      const rulesHeight = rules.length * 22;
+      const rulesHeight = rules.length * (this.isMobile ? 20 : 22);
       const legendHeight = 26;
       const totalContentHeight = titleHeight + rulesHeight + legendHeight + 40;
       const startY = boxY + (boxHeight - totalContentHeight) / 2;
       title.setY(startY);
       let textY = startY + titleHeight + 8;
+      const ruleFontSize = this.isMobile ? '13px' : '14px';
+      const wrapPadding = this.isMobile ? 40 : 60;
       rules.forEach((line) => {
         this.add.text(boxX, textY, line, {
           fontFamily: 'Verdana, sans-serif',
-          fontSize: '14px',
+          fontSize: ruleFontSize,
           color: '#cfcfcf',
           align: 'center',
-          wordWrap: { width: boxWidth - 60 },
+          wordWrap: { width: boxWidth - wrapPadding },
         }).setOrigin(0.5, 0);
         textY += 22;
       });
@@ -734,7 +745,7 @@ finishRound() {
 
     if (this.rowScoreLabels[r]) {
       if (word.length >= 3) {
-        const text = isValid ? `${score} (${length})` : `0 (${length})`;
+        const text = isValid ? `${score}` : `0`;
         this.rowScoreLabels[r].setText(text);
       } else {
         this.rowScoreLabels[r].setText("");
@@ -759,7 +770,7 @@ finishRound() {
 
     if (this.colScoreLabels[c]) {
       if (word.length >= 3) {
-        const text = isValid ? `${score}\n(${length})` : `0\n(${length})`;
+        const text = isValid ? `${score}` : `0`;
         this.colScoreLabels[c].setText(text);
       } else {
         this.colScoreLabels[c].setText("");
@@ -1188,7 +1199,7 @@ class SummaryScene extends Phaser.Scene {
         );
         const copyY = actionsBaseY + boardActionHeight + boardActionGap;
         makeBoardButton(
-          'Copy Colors',
+          'Share',
           0,
           copyY,
           boardActionWidth,
@@ -1213,7 +1224,7 @@ class SummaryScene extends Phaser.Scene {
           }
         );
         makeBoardButton(
-          'Copy Colors',
+          'Share',
           offset,
           actionsBaseY,
           boardActionWidth,
