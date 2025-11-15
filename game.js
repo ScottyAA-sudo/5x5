@@ -556,22 +556,24 @@ setupMobileLetterPad(handleLetter) {
   const wrapper = document.createElement('div');
   Object.assign(wrapper.style, {
     position: 'fixed',
-    left: '50%',
-    bottom: '12px',
-    transform: 'translateX(-50%)',
+    left: '0',
+    right: '0',
+    bottom: '0',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: '8px',
-    padding: '12px 14px 16px',
-    background: 'rgba(6, 6, 6, 0.92)',
-    borderRadius: '18px',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
+    padding: '16px 12px calc(18px + env(safe-area-inset-bottom, 0px))',
+    background: 'rgba(6, 6, 6, 0.96)',
+    borderRadius: '20px 20px 0 0',
+    boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.7)',
     zIndex: '2000',
     opacity: '0',
     pointerEvents: 'none',
     transition: 'opacity 0.18s ease',
-    maxWidth: '96vw'
+    width: '100%',
+    maxWidth: '100vw',
+    minHeight: '32vh'
   });
 
   const label = document.createElement('div');
@@ -579,45 +581,61 @@ setupMobileLetterPad(handleLetter) {
   Object.assign(label.style, {
     fontFamily: 'Arial Black, Verdana, sans-serif',
     fontSize: '14px',
-    letterSpacing: '0.04em',
+    letterSpacing: '0.05em',
     color: '#f4f4f4',
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    opacity: '0.9'
   });
 
-  const grid = document.createElement('div');
-  Object.assign(grid.style, {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, minmax(38px, 1fr))',
-    gap: '6px',
-    width: '100%'
+  const keyboard = document.createElement('div');
+  Object.assign(keyboard.style, {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px'
   });
 
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-  letters.forEach((letter) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = letter;
-    Object.assign(button.style, {
-      fontFamily: 'Arial Black, Verdana, sans-serif',
-      fontSize: '16px',
-      color: '#f4f4f4',
-      background: '#2b2b2b',
-      border: '1px solid #555555',
-      borderRadius: '8px',
-      padding: '10px 4px',
-      textTransform: 'uppercase',
-      cursor: 'pointer',
-      touchAction: 'manipulation'
+  const rows = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+  rows.forEach((rowLetters, rowIndex) => {
+    const row = document.createElement('div');
+    Object.assign(row.style, {
+      display: 'grid',
+      gridTemplateColumns: `repeat(${rowLetters.length}, minmax(0, 1fr))`,
+      gap: '6px',
+      width: '100%',
+      paddingLeft: rowIndex === 1 ? '12px' : rowIndex === 2 ? '32px' : '0',
+      paddingRight: rowIndex === 1 ? '12px' : rowIndex === 2 ? '32px' : '0'
     });
-    button.addEventListener('click', (event) => {
-      event.preventDefault();
-      handleLetter(letter).catch((err) => console.error('Mobile letter tap error:', err));
+
+    rowLetters.split('').forEach((letter) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = letter;
+      Object.assign(button.style, {
+        fontFamily: 'Arial Black, Verdana, sans-serif',
+        fontSize: '18px',
+        color: '#f4f4f4',
+        background: '#252525',
+        border: '1px solid #505050',
+        borderRadius: '10px',
+        padding: '14px 4px',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+        touchAction: 'manipulation',
+        width: '100%'
+      });
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        handleLetter(letter).catch((err) => console.error('Mobile letter tap error:', err));
+      });
+      row.appendChild(button);
     });
-    grid.appendChild(button);
+
+    keyboard.appendChild(row);
   });
 
   wrapper.appendChild(label);
-  wrapper.appendChild(grid);
+  wrapper.appendChild(keyboard);
   document.body.appendChild(wrapper);
   this.mobileLetterPad = wrapper;
 
