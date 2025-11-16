@@ -38,15 +38,19 @@ const gameConfig = {
 const GRID_SIZE = 5;
 let CELL_SIZE = 110;
 
-// Responsive scaling
-if (window.innerWidth < 500) {
-  CELL_SIZE = 70;
-  gameConfig.width = 400;
-  gameConfig.height = 700;
-} else if (window.innerWidth < 800) {
-  CELL_SIZE = 90;
-  gameConfig.width = 500;
-  gameConfig.height = 850;
+// Responsive scaling tuned for small screens
+{
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const availW = Math.floor((vw * 0.9) / GRID_SIZE);
+  const verticalPadding = 320; // header + spacing + legend/rules area
+  const availH = Math.floor((vh - verticalPadding) / GRID_SIZE);
+  const dynamicSize = Math.min(availW, availH);
+  CELL_SIZE = Math.max(58, Math.min(110, dynamicSize || CELL_SIZE));
+
+  // keep game canvas matching viewport
+  gameConfig.width = vw;
+  gameConfig.height = vh;
 }
 
 // ===================== Letter Distribution =====================
