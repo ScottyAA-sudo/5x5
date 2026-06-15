@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>5x5 — Word Grid Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0d0f14">
+
+  <!-- Fonts: Fredoka (rounded, playful) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Vendored locally so the game works offline and has no CDN dependency -->
+  <script src="vendor/phaser.min.js"></script>
+  <script src="vendor/supabase.min.js"></script>
+  <script src="game.js" defer></script>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 0%, #1a1d26 0%, #0d0f14 55%, #090a0e 100%);
+    font-family: 'Fredoka', Verdana, sans-serif;
+  }
+  #phaser-game {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    touch-action: manipulation;
+  }
+  canvas {
+    max-width: 100vw;
+    max-height: 100vh;
+    height: auto !important;
+    display: block;
+  }
+</style>
+</head>
+<body>
+  <div id="phaser-game"></div>
+</body>
+</html>

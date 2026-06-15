@@ -1,0 +1,1888 @@
+﻿// ===================== Supabase =====================
+// Used only for the online leaderboard. Word validation is fully local
+// (see dictionary.txt), so the game is playable even if this fails to load.
+let supabase = null;
+try {
+  if (window.supabase && window.supabase.createClient) {
+    supabase = window.supabase.createClient(
+      "https://bztovbzqubypgdskypjt.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6dG92YnpxdWJ5cGdkc2t5cGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyODM2NTIsImV4cCI6MjA3NDg1OTY1Mn0.DkWqGmN0B-9AUj7kr6B11hhhnB0b2BKFpOsnrixFNQU"
+    );
+  } else {
+    console.warn("Supabase library not available — leaderboard disabled.");
+  }
+} catch (err) {
+  console.error("Supabase init failed — leaderboard disabled:", err);
+}
+
+const lockPortrait = () => {
+  // On desktop browsers screen.orientation.lock() can throw synchronously
+  // (rather than returning a rejectable promise), so guard the whole thing.
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      const result = screen.orientation.lock('portrait');
+      if (result && typeof result.catch === 'function') result.catch(() => {});
+    }
+  } catch (err) {
+    /* orientation lock unsupported here — safe to ignore */
+  }
+};
+
+lockPortrait();
+window.addEventListener('orientationchange', () => {
+  lockPortrait();
+  // Retry shortly after rotation in case the first call is ignored
+  setTimeout(lockPortrait, 250);
+});
+
+// ===================== Game State =====================
+// ===================== Config =====================
+const DARK_BG = '#111111';
+const LIGHT_TEXT = '#f4f4f4';
+
+const gameConfig = {
+  type: Phaser.AUTO,
+  backgroundColor: DARK_BG,
+  parent: 'phaser-game',
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: window.innerWidth,
+    height: window.innerHeight
+  },
+  render: { pixelArt: false, antialias: true }
+};
+
+const GRID_SIZE = 5;
+let CELL_SIZE = 110;
+
+// Responsive scaling tuned for small screens
+{
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const availW = Math.floor((vw * 0.9) / GRID_SIZE);
+  const verticalPadding = 320; // header + spacing + legend/rules area
+  const availH = Math.floor((vh - verticalPadding) / GRID_SIZE);
+  const dynamicSize = Math.min(availW, availH);
+  CELL_SIZE = Math.max(58, Math.min(110, dynamicSize || CELL_SIZE));
+
+  // keep game canvas matching viewport
+  gameConfig.width = vw;
+  gameConfig.height = vh;
+}
+
+// ===================== Letter Distribution =====================
+const scrabbleDistribution = {
+  A: 10, B: 5, C: 3, D: 6, E: 15,
+  F: 3, G: 4, H: 3, I: 9, J: 1,
+  K: 2, L: 6, M: 4, N: 8, O: 9,
+  P: 3, Q: 1, R: 8, S: 5, T: 8,
+  U: 5, V: 2, W: 2, X: 1, Y: 2, Z: 1
+};
+const weightedLetters = [];
+for (const [letter, count] of Object.entries(scrabbleDistribution)) {
+  for (let i = 0; i < count; i++) weightedLetters.push(letter);
+}
+// --- Bigram + vowel bias maps ---
+const bigramMap = {
+  A: "NTRSL", B: "REALO", C: "HAREO", D: "EARNO", E: "RSTNL",
+  F: "REALO", G: "RANEO", H: "EAOIN", I: "NESTR",
+  J: "UOEA", K: "NEA", L: "EAST", M: "EAIO", N: "DTEA",
+  O: "RNSTL", P: "REALS", Q: "U", R: "ESTOA", S: "TEAOR", T: "HEAOR",
+  U: "RSTNL", V: "AEIO", W: "AROE", X: "PEA", Y: "AEIO", Z: "EA"
+};
+const vowels = ["A","E","I","O","U"];
+const consonants = "BCDFGHJKLMNPQRSTVWXYZ".split("");
+const COLOR_NONE = 0x2b3140;
+const COLOR_ROW = 0xe2c45a;
+const COLOR_COL = 0x4d9fd1;
+const COLOR_BOTH = 0x4fab7a;
+const HIGHLIGHT_EMPTY = 0x4c9dff;
+const HIGHLIGHT_FILLED = 0xbababa;
+
+// ===================== Typography =====================
+// Loaded from Google Fonts in index.html. Verdana/sans-serif fall back
+// until the web font is ready (we wait for it before launching the game).
+const FONT = 'Fredoka, Verdana, sans-serif';
+
+// Rounded-corner radius for grid cells, boxes and buttons.
+const CELL_RADIUS = 14;
+const BOX_RADIUS = 18;
+const BUTTON_RADIUS = 12;
+
+// ===================== Local Dictionary =====================
+// The word list ships with the game (dictionary.txt, ~14k words) so word
+// validation is instant and works offline. Previously every placement made
+// a network round-trip to Supabase, which made the board feel laggy.
+const DICTIONARY = new Set();
+let dictionaryReady = false;
+const dictionaryReadyPromise = fetch('dictionary.txt')
+  .then((res) => {
+    if (!res.ok) throw new Error(`dictionary.txt ${res.status}`);
+    return res.text();
+  })
+  .then((text) => {
+    text.split(/\r?\n/).forEach((line) => {
+      const word = line.trim().toLowerCase();
+      if (word) DICTIONARY.add(word);
+    });
+    dictionaryReady = true;
+    console.log(`Dictionary loaded: ${DICTIONARY.size} words`);
+  })
+  .catch((err) => {
+    console.error('Failed to load local dictionary:', err);
+  });
+
+
+// ===================== Scenes =====================
+
+/**
+ * Main gameplay scene. All game logic and state lives here.
+ * The create() method resets the game.
+ */
+class MainScene extends Phaser.Scene {
+  constructor() {
+    super('MainScene');
+  }
+
+  preload() {
+    // Preload assets here
+  }
+
+  create() {
+    // --- 1. Initialize Scene-Specific State ---
+    this.grid = [];
+    this.score = 0;
+    this.displayedScore = 0;
+    this.scoreTween = null;
+    this.rowScoreLabels = [];
+    this.colScoreLabels = [];
+    this.rowScores = Array(GRID_SIZE).fill(0);
+    this.colScores = Array(GRID_SIZE).fill(0);
+    this.rowBestLen = Array(GRID_SIZE).fill(0);
+    this.colBestLen = Array(GRID_SIZE).fill(0);
+    this.rowWords = Array(GRID_SIZE).fill(null);
+    this.colWords = Array(GRID_SIZE).fill(null);
+    this.currentLetter = '';
+    this.swapsUsed = 0;
+    this.swapIndicators = [];
+    this.gridTop = 0;
+    this.instructionBaseY = 0;
+    this.instructionMargin = 16;
+    this.isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    this.instructionMargin = this.isMobile ? 14 : 20;
+    this.mobileLetterPad = null;
+    this.mobilePadVisible = false;
+    this.turnPhase = 'CPU_TURN'; // 'CPU_TURN' | 'PLAYER_TURN' | 'BUSY'
+    this.selectedCell = null; 
+    this.gameFinished = false;
+
+    // --- 2. Get Canvas Size ---
+    const canvasWidth = this.sys.game.scale.gameSize.width;
+    const canvasHeight = this.sys.game.scale.gameSize.height;
+
+    const Z = { BG: -20, PANEL_SHADOW: 1, PANEL: 2, CELL: 10, DECOR: 15, HIGHLIGHT: 20, LETTER: 30, LABEL: 25 };
+
+    // Soft vertical gradient backdrop for depth.
+    const bg = this.add.graphics().setDepth(Z.BG);
+    bg.fillGradientStyle(0x1b1f29, 0x1b1f29, 0x0c0e13, 0x0c0e13, 1);
+    bg.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // --- 3. Layout constants ---
+    const gridWidth = GRID_SIZE * CELL_SIZE;
+    const gridHeight = GRID_SIZE * CELL_SIZE;
+    // Reserve a small gutter on the right so per-row score labels never clip
+    // off the edge on narrow screens. The grid is centered in what remains.
+    const LABEL_GUTTER = 30;
+    const GRID_LEFT = Math.max(8, (canvasWidth - LABEL_GUTTER - gridWidth) / 2);
+    const GRID_RIGHT = GRID_LEFT + gridWidth;
+    const gridCenterX = (GRID_LEFT + GRID_RIGHT) / 2;
+    const uiY = 10;
+    const instructionWidth = gridWidth - 24;
+    const turnFontSize = this.isMobile ? '15px' : '17px';
+    this.instructionBaseY = uiY + 95;
+
+    // --- 4. Top UI Row ---
+    {
+      const nbSize = 84;
+      const nbLeft = gridCenterX - nbSize / 2;
+      this.nextLetterBox = this.add.graphics();
+      this.nextLetterBox.fillStyle(0x1b1f29, 1);
+      this.nextLetterBox.fillRoundedRect(nbLeft, uiY, nbSize, nbSize, BOX_RADIUS);
+      this.nextLetterBox.lineStyle(3, 0x3a4150, 1);
+      this.nextLetterBox.strokeRoundedRect(nbLeft, uiY, nbSize, nbSize, BOX_RADIUS);
+    }
+    this.nextLetterText = this.add.text(gridCenterX, uiY + 42, '', {
+      fontFamily: FONT,
+      fontSize: '48px',
+      fontStyle: 'bold',
+      color: '#82c4ff'
+    }).setOrigin(0.5);
+    this.scoreText = this.add.text(GRID_RIGHT, uiY + 12, 'Score: 0', {
+      fontFamily: FONT,
+      fontSize: '20px',
+      fontStyle: 'bold',
+      color: LIGHT_TEXT
+    }).setOrigin(1, 0.5);
+    this.turnText = this.add.text(gridCenterX, this.instructionBaseY, '', {
+      fontFamily: FONT,
+      fontSize: turnFontSize,
+      fontStyle: 'normal',
+      color: '#c9ced9',
+      align: 'center',
+      wordWrap: { width: instructionWidth, useAdvancedWrap: true },
+      lineSpacing: 5
+    }).setOrigin(0.5, 0);
+
+    // Reserve enough vertical room for the instruction block
+    const sampleInstruction = this.isMobile
+      ? this.getMobileTurnPrompt()
+      : this.getDesktopTurnPrompt();
+    this.turnText.setText(sampleInstruction);
+    const measuredHeight = this.turnText.getBounds().height || (this.isMobile ? 84 : 64);
+    this.turnText.setText('');
+    const rawGridTop = Math.max(60, (canvasHeight - (gridHeight + 300)) / 2);
+    const headerFloor = this.instructionBaseY + measuredHeight + this.instructionMargin;
+    const GRID_TOP = Math.max(rawGridTop, headerFloor);
+    this.gridTop = GRID_TOP;
+    this.positionInstructionText();
+
+    // --- 5. Board Panel (frames the grid with a soft shadow) ---
+    {
+      const pad = 10;
+      const px = GRID_LEFT - pad;
+      const py = GRID_TOP - pad;
+      const pw = gridWidth + pad * 2;
+      const ph = gridHeight + pad * 2;
+      const radius = BOX_RADIUS + 6;
+      const shadow = this.add.graphics().setDepth(Z.PANEL_SHADOW);
+      shadow.fillStyle(0x000000, 0.35);
+      shadow.fillRoundedRect(px, py + 8, pw, ph, radius);
+      const panel = this.add.graphics().setDepth(Z.PANEL);
+      panel.fillStyle(0x161a22, 1);
+      panel.fillRoundedRect(px, py, pw, ph, radius);
+      panel.lineStyle(2, 0x2b313d, 1);
+      panel.strokeRoundedRect(px, py, pw, ph, radius);
+    }
+
+    // --- 5b. Build Grid (rounded cells) ---
+    for (let row = 0; row < GRID_SIZE; row++) {
+      this.grid[row] = [];
+      for (let col = 0; col < GRID_SIZE; col++) {
+        const x = GRID_LEFT + col * CELL_SIZE + CELL_SIZE / 2;
+        const y = GRID_TOP + row * CELL_SIZE + CELL_SIZE / 2;
+        const inset = 4;
+        const left = x - CELL_SIZE / 2 + inset;
+        const top = y - CELL_SIZE / 2 + inset;
+        const size = CELL_SIZE - inset * 2;
+
+        const bg = this.add.graphics().setDepth(Z.CELL);
+        bg.setInteractive(
+          new Phaser.Geom.Rectangle(left, top, size, size),
+          Phaser.Geom.Rectangle.Contains
+        );
+        bg.on('pointerdown', () => this.placeLetter(row, col));
+
+        const highlight = this.add.graphics().setDepth(Z.HIGHLIGHT);
+        const letterText = this.add.text(x, y, '', {
+          fontFamily: FONT,
+          fontSize: '34px',
+          fontStyle: 'bold',
+          color: LIGHT_TEXT
+        }).setOrigin(0.5).setDepth(Z.LETTER)
+          .setShadow(0, 3, 'rgba(0,0,0,0.55)', 5, false, true);
+
+        const cell = {
+          bg,
+          highlight,
+          letterText,
+          x, y, left, top, size,
+          fillColor: COLOR_NONE,
+          strokeColor: 0x474f63,
+          filled: false,
+          rowValid: false,
+          colValid: false,
+          patternCode: 'none'
+        };
+        this.grid[row][col] = cell;
+        this.drawCellBackground(cell);
+      }
+    }
+
+    // --- 6. Background Watermark ---
+    {
+      const gridCenterY = GRID_TOP + gridHeight / 2;
+      const bgText = this.add.text(gridCenterX, gridCenterY, '5x5', {
+        fontFamily: FONT,
+        fontSize: `${CELL_SIZE * 2.6}px`,
+        fontStyle: 'bold',
+        color: '#ffffff'
+      }).setOrigin(0.5).setAlpha(0.10).setAngle(-10).setDepth(Z.DECOR);
+      this.tweens.add({
+        targets: bgText,
+        alpha: { from: 0, to: 0.06 },
+        duration: 600,
+        ease: 'Quad.easeOut'
+      });
+    }
+
+    // --- 7. Row & Column Labels ---
+    for (let r = 0; r < GRID_SIZE; r++) {
+      const x = GRID_RIGHT + 9;
+      const y = GRID_TOP + r * CELL_SIZE + CELL_SIZE / 2;
+      this.rowScoreLabels[r] = this.add.text(x, y, '', {
+        fontFamily: FONT,
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#cfcfcf'
+      }).setOrigin(0, 0.5).setDepth(Z.LABEL);
+    }
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const x = GRID_LEFT + c * CELL_SIZE + CELL_SIZE / 2;
+      const y = GRID_TOP + GRID_SIZE * CELL_SIZE + 8;
+      this.colScoreLabels[c] = this.add.text(x, y, '', {
+        fontFamily: FONT,
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#cfcfcf'
+      }).setOrigin(0.5, 0).setDepth(Z.LABEL);
+    }
+
+    this.refreshCellColors();
+
+    // --- 8. Swap Lights ---
+    const lightsY = GRID_TOP + GRID_SIZE * CELL_SIZE + 60;
+    const startX = canvasWidth / 2 - 60;
+    for (let i = 0; i < 3; i++) {
+      const light = this.add.circle(startX + i * 60, lightsY, 12, 0x2d2d2d);
+      light.setStrokeStyle(2, 0x555555);
+      this.swapIndicators.push(light);
+    }
+    this.updateSwapIndicators();
+    this.add.text(canvasWidth / 2, lightsY + 20, 'Swaps Used', {
+      fontFamily: FONT,
+      fontSize: '12px',
+      color: '#c0c0c0'
+    }).setOrigin(0.5, 0);
+    
+    // --- 9. Rules Box ---
+    {
+      const boxY = lightsY + 60;
+      const boxWidth = Math.min(canvasWidth * 0.9, 480);
+      const boxHeight = 200;
+      const boxX = canvasWidth / 2;
+      {
+        const rb = this.add.graphics().setDepth(0);
+        rb.fillStyle(0x161a22, 0.96);
+        rb.fillRoundedRect(boxX - boxWidth / 2, boxY, boxWidth, boxHeight, BOX_RADIUS);
+        rb.lineStyle(2, 0x2b313d, 1);
+        rb.strokeRoundedRect(boxX - boxWidth / 2, boxY, boxWidth, boxHeight, BOX_RADIUS);
+      }
+      const title = this.add.text(boxX, 0, '3-letter = 5 pts  •  4-letter = 15 pts  •  5-letter = 25 pts', {
+        fontFamily: FONT,
+        fontSize: '13px',
+        color: '#dddddd',
+      }).setOrigin(0.5, 0);
+      const rules = [
+        '• Words read from the top or left edge',
+        '• 3 swaps allowed — overwrite a letter',
+        '• Game ends when the grid is full',
+      ];
+      const titleHeight = 18;
+      const rulesHeight = rules.length * 22;
+      const legendHeight = 26;
+      const totalContentHeight = titleHeight + rulesHeight + legendHeight + 40;
+      const startY = boxY + (boxHeight - totalContentHeight) / 2;
+      title.setY(startY);
+      let textY = startY + titleHeight + 8;
+      const ruleFontSize = this.isMobile ? '12px' : '14px';
+      const wrapPadding = this.isMobile ? 18 : 60;
+      const lineAdvance = 22;
+      rules.forEach((line) => {
+        const ruleText = this.add.text(boxX, textY, line, {
+          fontFamily: FONT,
+          fontSize: ruleFontSize,
+          color: '#cfcfcf',
+          align: 'center',
+          wordWrap: { width: boxWidth - wrapPadding },
+        }).setOrigin(0.5, 0);
+        // Advance by the line's real height so wrapped lines don't overlap.
+        textY += Math.max(lineAdvance, ruleText.getBounds().height + 4);
+      });
+      this.add.line(boxX, textY + 6, boxX - boxWidth / 2 + 10, textY + 6, boxX + boxWidth / 2 - 10, textY + 6, 0x444444).setOrigin(0.5, 0).setLineWidth(1);
+      const legendY = textY + 28;
+      const legendSpacing = 110;
+      const drawLegendItem = (color, label, offsetX) => {
+        const rect = this.add.rectangle(boxX + offsetX, legendY, 18, 18, color, 0.7).setOrigin(0.5);
+        rect.setStrokeStyle(1, 0x666666, 0.9);
+        this.add.text(boxX + offsetX + 16, legendY, label, {
+          fontFamily: FONT,
+          fontSize: '15px',
+          color: '#dddddd',
+        }).setOrigin(0, 0.5);
+      };
+      drawLegendItem(COLOR_ROW, 'Horizontal', -legendSpacing);
+      drawLegendItem(COLOR_COL, 'Vertical', 0);
+      drawLegendItem(COLOR_BOTH, 'Both', legendSpacing);
+    }
+
+    // --- 10. Setup Input and Start Game ---
+    this.setupKeyboardInput();
+    this.startCpuTurn();
+  }
+
+  update() {
+    // Runs every frame
+  }
+
+  getMobileTurnPrompt() {
+    return "Your turn: pick an empty square (or an occupied one to swap), type a letter, then press Enter.";
+  }
+
+  getDesktopTurnPrompt() {
+    return "Your turn: pick a square (or an occupied one to swap), then press a letter key to place it.";
+  }
+
+  setInstructionText(message = "") {
+    if (!this.turnText) return;
+    this.turnText.setText(message);
+    this.positionInstructionText();
+  }
+
+  positionInstructionText() {
+    if (!this.turnText) return;
+    const gridTop = this.gridTop || (this.instructionBaseY + 220);
+    const bounds = this.turnText.getBounds();
+    const height = bounds.height || 0;
+    const margin = this.instructionMargin ?? 16;
+    const allowedY = gridTop - height - margin;
+    const newY = Math.min(this.instructionBaseY, allowedY);
+    this.turnText.setY(newY);
+  }
+
+  // ======================================================
+// ===============   TURN CONTROL  (Class Methods)  =====
+// ======================================================
+
+/**
+ * Main entry point for any letter placement.
+ */
+async placeLetter(row, col) {
+  if (this.gameFinished || this.turnPhase === "BUSY") return;
+
+  if (this.turnPhase === "CPU_TURN") {
+    return this.handleCpuPlacement(row, col);
+  }
+
+  if (this.turnPhase === "PLAYER_TURN") {
+    return this.handlePlayerClick(row, col);
+  }
+}
+
+/**
+ * CPU prepares its next letter and waits for the player to place it.
+ */
+startCpuTurn() {
+  if (this.gameFinished) return;
+  if (this.isBoardFull()) return this.finishRound();
+  this.turnPhase = "CPU_TURN";
+  this.currentLetter = this.pickNextLetter();
+  this.updateNextLetterUI(true);
+  const swapsLeft = Math.max(0, 3 - (this.swapsUsed || 0));
+  this.setInstructionText(`Tap a square to place this letter.  Swaps left: ${swapsLeft}`);
+  this.clearSelectionState();
+}
+
+/**
+ * CPU places its current letter, then passes control to the player.
+ */
+async handleCpuPlacement(row, col) {
+  const cell = this.grid[row][col];
+  if (!cell) return;
+
+  const replacingExisting = cell.filled;
+  if (replacingExisting && this.swapsUsed >= 3) {
+    this.setInstructionText("All swaps used. Pick an empty square for the CPU letter.");
+    return;
+  }
+
+  if (replacingExisting) {
+    this.swapsUsed++;
+    this.updateSwapIndicators();
+  }
+
+  cell.letterText.setText(this.currentLetter);
+  cell.filled = true;
+  this.turnPhase = "BUSY";
+  this.animateLetterIn(cell);
+
+  await this.adjudicatePlacement(cell);
+
+  // CPU done -> Player turn
+  if (this.isBoardFull()) {
+    this.finishRound();
+    return;
+  }
+
+  this.startPlayerTurn();
+}
+
+
+
+/**
+ * Starts the Player's turn.
+ */
+startPlayerTurn() {
+  if (this.gameFinished) return;
+  if (this.isBoardFull()) return this.finishRound();
+  this.turnPhase = "PLAYER_TURN";
+  this.currentLetter = ""; // clear CPU letter
+  this.updateNextLetterUI(false);
+  if (this.isMobile) {
+    this.setInstructionText(this.getMobileTurnPrompt());
+  } else {
+    this.setInstructionText(this.getDesktopTurnPrompt());
+  }
+  this.clearSelectionState();
+}
+
+
+/**
+ * Handles the player clicking a cell to select it.
+ */
+handlePlayerClick(row, col) {
+  if (this.turnPhase !== "PLAYER_TURN") return;
+  const cell = this.grid[row][col];
+  if (!cell) return;
+  // allow selecting an occupied cell only if swaps remain
+  if (cell.filled && (this.swapsUsed >= 3)) {
+    this.setInstructionText("All swaps used. Pick an empty square for your letter.");
+    return;
+  }
+  this.highlightSelectedCell(row, col);
+}
+
+/**
+ * Finalizes the player's move after they press Enter.
+ */
+async finalizePlayerLetter(cell) {
+  if (!cell || this.gameFinished) return;
+
+  const letter = cell.letterText.text?.toUpperCase() || "";
+  if (!letter.match(/^[A-Z]$/)) {
+    console.warn("Invalid or empty letter.");
+    this.startCpuTurn();
+    return;
+  }
+
+  this.turnPhase = "BUSY";
+  const wasFilled = !!cell.filled;
+  if (wasFilled) {
+    // swapping an already-placed letter
+    if (this.swapsUsed >= 3) {
+      console.warn('No swaps remaining');
+      this.startCpuTurn();
+      return;
+    }
+    this.swapsUsed++;
+    this.updateSwapIndicators();
+  }
+
+  cell.filled = true;
+  cell.letterText.setText(letter);
+  this.currentLetter = letter;
+  this.animateLetterIn(cell);
+
+  try {
+    await this.adjudicatePlacement(cell);
+  } catch (err) {
+    console.error("Adjudication error:", err);
+  }
+
+  if (this.isBoardFull()) {
+    this.finishRound();
+    return;
+  }
+
+  // After adjudication, hand control back to CPU
+  this.startCpuTurn();
+}
+
+/**
+ * Sets up the keyboard listener for this scene.
+ */
+setupKeyboardInput() {
+  const handleLetter = async (letter) => {
+    if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) return;
+    this.selectedCell.letterText.setText(letter);
+    try {
+      this.turnPhase = "BUSY";
+      const cellToFinalize = this.selectedCell;
+      await this.finalizePlayerLetter(cellToFinalize);
+      this.clearSelectionState();
+    } catch (err) {
+      console.error('Error auto-finalizing letter:', err);
+    }
+  };
+
+  const handleEnter = async () => {
+    if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell?.letterText.text) return;
+    this.turnPhase = "BUSY";
+    const cellToFinalize = this.selectedCell;
+    await this.finalizePlayerLetter(cellToFinalize);
+    this.clearSelectionState();
+  };
+
+  this.input.keyboard.on("keydown", async (e) => {
+    const raw = e.key || '';
+    const k = raw.toUpperCase();
+
+    if (k === "ESCAPE") {
+      this.cancelSelection();
+      return;
+    }
+
+    if (this.turnPhase !== "PLAYER_TURN" || !this.selectedCell) return;
+
+    // Only accept single-letter keys A-Z
+    if (/^[A-Z]$/.test(k)) {
+      await handleLetter(k);
+      return;
+    }
+
+    if (k === "ENTER") {
+      await handleEnter();
+    }
+  });
+
+  if (this.isMobile) {
+    this.setupMobileLetterPad(handleLetter);
+  }
+}
+
+setupMobileLetterPad(handleLetter) {
+  if (this.mobileLetterPad) return;
+  const wrapper = document.createElement('div');
+  Object.assign(wrapper.style, {
+    position: 'fixed',
+    left: '0',
+    right: '0',
+    bottom: '0',
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '16px 12px calc(18px + env(safe-area-inset-bottom, 0px))',
+    background: 'rgba(6, 6, 6, 0.96)',
+    borderRadius: '20px 20px 0 0',
+    boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.7)',
+    zIndex: '2000',
+    opacity: '0',
+    pointerEvents: 'none',
+    transition: 'opacity 0.18s ease',
+    width: '100%',
+    maxWidth: '100vw',
+    minHeight: '32vh'
+  });
+
+  const label = document.createElement('div');
+  label.textContent = 'Tap a letter';
+  Object.assign(label.style, {
+    fontFamily: FONT,
+    fontSize: '14px',
+    letterSpacing: '0.05em',
+    color: '#f4f4f4',
+    textTransform: 'uppercase',
+    opacity: '0.9'
+  });
+
+  const keyboard = document.createElement('div');
+  Object.assign(keyboard.style, {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px'
+  });
+
+  const rows = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+  rows.forEach((rowLetters, rowIndex) => {
+    const row = document.createElement('div');
+    Object.assign(row.style, {
+      boxSizing: 'border-box',
+      display: 'grid',
+      gridTemplateColumns: `repeat(${rowLetters.length}, minmax(0, 1fr))`,
+      gap: '6px',
+      width: '100%',
+      paddingLeft: rowIndex === 1 ? '12px' : rowIndex === 2 ? '32px' : '0',
+      paddingRight: rowIndex === 1 ? '12px' : rowIndex === 2 ? '32px' : '0'
+    });
+
+    rowLetters.split('').forEach((letter) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = letter;
+      Object.assign(button.style, {
+        fontFamily: FONT,
+        fontSize: '18px',
+        color: '#f4f4f4',
+        background: '#252525',
+        border: '1px solid #505050',
+        borderRadius: '10px',
+        padding: '14px 4px',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+        touchAction: 'manipulation',
+        width: '100%'
+      });
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        handleLetter(letter).catch((err) => console.error('Mobile letter tap error:', err));
+      });
+      row.appendChild(button);
+    });
+
+    keyboard.appendChild(row);
+  });
+
+  wrapper.appendChild(label);
+  wrapper.appendChild(keyboard);
+  document.body.appendChild(wrapper);
+  this.mobileLetterPad = wrapper;
+
+  const cleanup = () => {
+    if (wrapper.parentNode) {
+      wrapper.parentNode.removeChild(wrapper);
+    }
+    this.mobileLetterPad = null;
+  };
+
+  this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+  this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
+}
+
+showMobileLetterPad() {
+  if (!this.isMobile || !this.mobileLetterPad || this.mobilePadVisible) return;
+  this.mobileLetterPad.style.opacity = '1';
+  this.mobileLetterPad.style.pointerEvents = 'auto';
+  this.mobilePadVisible = true;
+}
+
+hideMobileLetterPad() {
+  if (!this.isMobile || !this.mobileLetterPad || !this.mobilePadVisible) return;
+  this.mobileLetterPad.style.opacity = '0';
+  this.mobileLetterPad.style.pointerEvents = 'none';
+  this.mobilePadVisible = false;
+}
+
+/**
+ * Finds a random empty cell on the grid.
+ */
+findRandomEmptyCell() {
+  const empties = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (!this.grid[r][c].filled) empties.push([r, c]);
+    }
+  }
+  if (!empties.length) return [null, null];
+  return Phaser.Utils.Array.GetRandom(empties);
+}
+
+isBoardFull() {
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (!this.grid[r][c].filled) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+finishRound() {
+  if (this.gameFinished) return;
+  this.gameFinished = true;
+  this.turnPhase = "BUSY";
+  this.updateNextLetterUI(false);
+  this.clearSelectionState();
+  this.setInstructionText("Board complete! Final score coming up...");
+
+  const summaryWords = this.collectSummaryWords();
+  const boardSnapshot = this.captureBoardSnapshot();
+
+  this.time.delayedCall(2000, () => {
+    this.scene.start("SummaryScene", {
+      words: summaryWords,
+      total: this.score,
+      boardSnapshot
+    });
+  });
+}
+
+
+
+  // ======================================================
+  // ===============   SCORING & HELPERS  ================
+  // ======================================================
+  
+  async recomputeRow(r) {
+    const word = this.buildRowWord(r);
+    const result = await this.scoreWord(word);
+    const { score, length, isValid, matchedWord } = result;
+
+    this.rowScores[r] = score;
+    this.applyRowValidity(r, isValid, length);
+
+    if (isValid) {
+      this.rowBestLen[r] = Math.max(this.rowBestLen[r] || 0, length);
+      this.rowWords[r] = { word: matchedWord, score, direction: `Row ${r + 1}` };
+    } else {
+      this.rowWords[r] = null;
+    }
+
+    if (this.rowScoreLabels[r]) {
+      if (word.length >= 3) {
+        const text = isValid ? `${score}` : `0`;
+        this.rowScoreLabels[r].setText(text);
+      } else {
+        this.rowScoreLabels[r].setText("");
+      }
+    }
+  }
+  
+  async recomputeColumn(c) {
+    const word = this.buildColumnWord(c);
+    const result = await this.scoreWord(word);
+    const { score, length, isValid, matchedWord } = result;
+
+    this.colScores[c] = score;
+    this.applyColumnValidity(c, isValid, length);
+
+    if (isValid) {
+      this.colBestLen[c] = Math.max(this.colBestLen[c] || 0, length);
+      this.colWords[c] = { word: matchedWord, score, direction: `Col ${c + 1}` };
+    } else {
+      this.colWords[c] = null;
+    }
+
+    if (this.colScoreLabels[c]) {
+      if (word.length >= 3) {
+        const text = isValid ? `${score}` : `0`;
+        this.colScoreLabels[c].setText(text);
+      } else {
+        this.colScoreLabels[c].setText("");
+      }
+    }
+  }
+  
+  buildRowWord(r) {
+    let word = "";
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const ch = this.grid[r][c]?.letterText?.text || "";
+      if (!ch) break;
+      word += ch.toUpperCase();
+    }
+    return word;
+  }
+
+  buildColumnWord(c) {
+    let word = "";
+    for (let r = 0; r < GRID_SIZE; r++) {
+      const ch = this.grid[r][c]?.letterText?.text || "";
+      if (!ch) break;
+      word += ch.toUpperCase();
+    }
+    return word;
+  }
+
+  scoreForLength(len) {
+    if (len === 3) return 5;
+    if (len === 4) return 15;
+    if (len >= 5) return 25;
+    return 0;
+  }
+
+  async scoreWord(word) {
+    const contiguousLength = word.length;
+    if (contiguousLength < 3) {
+      return { score: 0, length: contiguousLength, isValid: false, matchedWord: "" };
+    }
+
+    for (let len = contiguousLength; len >= 3; len--) {
+      const candidate = word.slice(0, len);
+      const isValid = await this.validateWord(candidate);
+      if (isValid) {
+        return {
+          score: this.scoreForLength(len),
+          length: len,
+          isValid: true,
+          matchedWord: candidate
+        };
+      }
+    }
+
+    return { score: 0, length: contiguousLength, isValid: false, matchedWord: "" };
+  }
+
+  async validateWord(word) {
+    const cleaned = (word || "").toLowerCase();
+    if (cleaned.length < 3) return false;
+
+    // Make sure the local word list has finished loading. After the first
+    // load this resolves immediately, so lookups are effectively instant.
+    if (!dictionaryReady) {
+      try {
+        await dictionaryReadyPromise;
+      } catch (err) {
+        console.error("Dictionary not available:", err);
+      }
+    }
+
+    return DICTIONARY.has(cleaned);
+  }
+
+  applyRowValidity(rowIndex, isValid, length) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const cell = this.grid[rowIndex][c];
+      cell.rowValid = Boolean(isValid && c < length);
+    }
+  }
+
+  applyColumnValidity(colIndex, isValid, length) {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      const cell = this.grid[r][colIndex];
+      cell.colValid = Boolean(isValid && r < length);
+    }
+  }
+
+  // Redraws a cell's rounded background using its current fill/stroke colors.
+  drawCellBackground(cell) {
+    const g = cell.bg;
+    g.clear();
+    g.fillStyle(cell.fillColor, 1);
+    g.fillRoundedRect(cell.left, cell.top, cell.size, cell.size, CELL_RADIUS);
+    g.lineStyle(2, cell.strokeColor, 1);
+    g.strokeRoundedRect(cell.left, cell.top, cell.size, cell.size, CELL_RADIUS);
+  }
+
+  // Draws (or clears) the selection highlight overlay for a cell.
+  drawCellHighlight(cell, color, alpha) {
+    const g = cell.highlight;
+    g.clear();
+    if (alpha > 0) {
+      const pad = 4;
+      g.fillStyle(color, alpha);
+      g.fillRoundedRect(cell.left + pad, cell.top + pad, cell.size - pad * 2, cell.size - pad * 2, CELL_RADIUS - 3);
+    }
+  }
+
+  // Pops a freshly placed letter in for a bit of life.
+  animateLetterIn(cell) {
+    if (!cell || !cell.letterText) return;
+    cell.letterText.setScale(0.3);
+    this.tweens.add({
+      targets: cell.letterText,
+      scale: 1,
+      duration: 240,
+      ease: 'Back.easeOut'
+    });
+  }
+
+  refreshCellColors() {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const cell = this.grid[r][c];
+        const prevPattern = cell.patternCode;
+        let fill = COLOR_NONE;
+        let pattern = 'none';
+        let stroke = 0x474f63;
+        if (cell.rowValid && cell.colValid) {
+          fill = COLOR_BOTH;
+          pattern = 'both';
+        } else if (cell.rowValid) {
+          fill = COLOR_ROW;
+          pattern = 'row';
+        } else if (cell.colValid) {
+          fill = COLOR_COL;
+          pattern = 'col';
+        }
+        if (pattern !== 'none') stroke = 0x12151c; // dark rim makes colors pop
+        cell.fillColor = fill;
+        cell.strokeColor = stroke;
+        cell.patternCode = pattern;
+        this.drawCellBackground(cell);
+
+        // Pulse the letter when its cell first becomes part of a valid word.
+        if (prevPattern === 'none' && pattern !== 'none' && cell.letterText.text) {
+          this.tweens.add({
+            targets: cell.letterText,
+            scale: { from: 1.28, to: 1 },
+            duration: 320,
+            ease: 'Back.easeOut'
+          });
+        }
+      }
+    }
+  }
+
+  captureBoardSnapshot() {
+    return this.grid.map((row) =>
+      row.map((cell) => ({
+        pattern: cell.patternCode || 'none',
+        letter: (cell.letterText?.text || '').toUpperCase()
+      }))
+    );
+  }
+
+  collectSummaryWords() {
+    const results = [];
+    this.rowWords.forEach((entry) => {
+      if (entry) results.push({ ...entry });
+    });
+    this.colWords.forEach((entry) => {
+      if (entry) results.push({ ...entry });
+    });
+    return results;
+  }
+  
+  findCell(cellToFind) {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        if (this.grid[r][c] === cellToFind) {
+          return [r, c];
+        }
+      }
+    }
+    return null;
+  }
+
+  async adjudicatePlacement(cell) {
+    const pos = this.findCell(cell);
+    if (!pos) return;
+    
+    const [r, c] = pos;
+    await Promise.all([this.recomputeRow(r), this.recomputeColumn(c)]);
+    this.refreshCellColors();
+    
+    let newScore = 0;
+    this.rowScores.forEach(s => newScore += s);
+    this.colScores.forEach(s => newScore += s);
+    this.score = newScore;
+
+    this.animateScoreTo(newScore);
+  }
+
+  // Counts the score display up/down smoothly to the new total.
+  animateScoreTo(target) {
+    if (!this.scoreText) return;
+    const from = this.displayedScore || 0;
+    if (from === target) {
+      this.scoreText.setText(`Score: ${target}`);
+      return;
+    }
+    if (this.scoreTween) this.scoreTween.remove();
+    this.scoreTween = this.tweens.addCounter({
+      from,
+      to: target,
+      duration: 450,
+      ease: 'Cubic.easeOut',
+      onUpdate: (tw) => {
+        this.scoreText.setText(`Score: ${Math.round(tw.getValue())}`);
+      },
+      onComplete: () => {
+        this.scoreText.setText(`Score: ${target}`);
+      }
+    });
+    this.displayedScore = target;
+    // Quick pop on the score text when it changes.
+    this.scoreText.setScale(1.18);
+    this.tweens.add({ targets: this.scoreText, scale: 1, duration: 260, ease: 'Back.easeOut' });
+  }
+
+  // ======================================================
+  // ===============   UI & LETTER PICKERS  ==============
+  // ======================================================
+
+  updateNextLetterUI(visible = true) {
+    if (!this.nextLetterText) return;
+    this.nextLetterText.setText(visible ? this.currentLetter : "");
+  }
+
+  /**
+   * Clears only the selection *state* (highlight and variable).
+   * Does NOT clear temporary text.
+   */
+  clearSelectionState() {
+    if (this.selectedCell) {
+      this.drawCellHighlight(this.selectedCell, 0xffffff, 0);
+      this.selectedCell = null;
+    }
+    if (this.isMobile) {
+      this.hideMobileLetterPad();
+    }
+  }
+/**
+   * Cancels a selection (on ESCAPE).
+   * This DOES clear temporary text.
+   */
+  cancelSelection() {
+    if (this.selectedCell) {
+      if (!this.selectedCell.filled) {
+        this.selectedCell.letterText.setText('');
+      }
+      this.drawCellHighlight(this.selectedCell, 0xffffff, 0);
+      this.selectedCell = null;
+    }
+    if (this.isMobile) {
+      this.hideMobileLetterPad();
+    }
+  }
+/**
+   * Highlights a new cell and cleans up the previous one.
+   */
+  highlightSelectedCell(row, col) {
+    // 1. Clean up the OLD cell
+    if (this.selectedCell) {
+      this.drawCellHighlight(this.selectedCell, 0xffffff, 0);
+      // Only clear if it's blank AND not finalized
+      if (!this.selectedCell.filled && this.selectedCell.letterText.text === '') {
+        this.selectedCell.letterText.setText('');
+      }
+    }
+
+    // 2. Set the NEW cell
+    const cell = this.grid[row][col];
+    // use a different highlight color for swapping (occupied cell)
+    if (cell.filled) {
+      this.drawCellHighlight(cell, HIGHLIGHT_FILLED, 0.55);
+    } else {
+      this.drawCellHighlight(cell, HIGHLIGHT_EMPTY, 0.35);
+    }
+    this.selectedCell = cell;
+    if (this.isMobile) {
+      this.showMobileLetterPad();
+    }
+  }
+
+  updateSwapIndicators() {
+    const used = Math.min(3, this.swapsUsed || 0);
+    for (let i = 0; i < this.swapIndicators.length; i++) {
+      const light = this.swapIndicators[i];
+      if (i < used) {
+        light.setFillStyle(COLOR_BOTH);
+      } else {
+        light.setFillStyle(0x2d2d2d);
+      }
+    }
+  }
+
+  weightedPick(list) {
+    if (typeof list === "string") list = list.split("");
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  getVowelRatio() {
+    let letters = [];
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const ch = this.grid[r][c]?.letterText?.text || "";
+        if (ch) letters.push(ch);
+      }
+    }
+    if (!letters.length) return 0.4;
+    return letters.filter(l => vowels.includes(l)).length / letters.length;
+  }
+
+  pickNextLetter() {
+    const useBigram = Math.random() < 0.7;
+    const v = this.getVowelRatio();
+    
+    if (v < 0.35 && Math.random() < 0.4) {
+      return this.weightedPick(vowels);
+    }
+    if (v > 0.55 && Math.random() < 0.4) {
+      return this.weightedPick(consonants);
+    }
+    
+    const opts = bigramMap[this.currentLetter];
+    return (useBigram && opts) ? this.weightedPick(opts) : this.weightedPick(weightedLetters);
+  }
+} // <-- END OF MainScene CLASS
+
+
+// ===================== Summary Scene =====================
+class SummaryScene extends Phaser.Scene {
+  constructor() { super('SummaryScene'); }
+
+  async create(data) {
+    const { words = [], total = 0, boardSnapshot = [], skipAutoPrompt = false } = data;
+    const summaryPayload = { words, total, boardSnapshot };
+    const summaryReturnPayload = { ...summaryPayload, skipAutoPrompt: true };
+    if (typeof window !== 'undefined') {
+      window.__lastSummaryData = summaryReturnPayload;
+    }
+    this.finalScore = total;
+    this.summaryToast = null;
+    this.summaryToastTween = null;
+
+    const { width, height } = this.sys.game.scale.gameSize;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const cardWidth = Math.min(520, width * 0.9);
+    const cardHeight = Math.min(620, height * 0.85);
+
+    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.55).setDepth(0);
+    const card = this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0x1a1a1a)
+      .setStrokeStyle(3, 0x555555)
+      .setOrigin(0.5)
+      .setDepth(0);
+    this.tweens.add({ targets: card, alpha: 1, duration: 250 });
+
+    this.add.text(centerX, centerY - cardHeight / 2 + 50, 'Game Over', {
+      fontFamily: FONT,
+      fontSize: '32px',
+      color: LIGHT_TEXT
+    }).setOrigin(0.5).setDepth(1);
+
+    this.add.text(centerX, centerY - cardHeight / 2 + 100, `Total Score: ${total}`, {
+      fontFamily: FONT,
+      fontSize: '22px',
+      color: '#f0f0f0'
+    }).setOrigin(0.5).setDepth(1);
+
+    const boardTopY = centerY - cardHeight / 2 + 140;
+    const hasBoard = Array.isArray(boardSnapshot) && boardSnapshot.length && boardSnapshot[0]?.length;
+    const boardHolder = this.add.container(0, 0).setDepth(1);
+    let showLetters = false;
+    let boardBottom = boardTopY;
+
+    const colorForPattern = (pattern) => {
+      if (pattern === 'row') return COLOR_ROW;
+      if (pattern === 'col') return COLOR_COL;
+      if (pattern === 'both') return COLOR_BOTH;
+      return 0x2b2b2b;
+    };
+
+    if (hasBoard) {
+      this.add.text(centerX, boardTopY - 20, 'Final Board', {
+        fontFamily: FONT,
+        fontSize: '18px',
+        color: '#cccccc'
+      }).setOrigin(0.5).setDepth(1);
+
+      const rows = boardSnapshot.length;
+      const cols = boardSnapshot[0].length;
+      const availableWidth = Math.max(160, cardWidth - 140);
+      const availableHeight = Math.max(200, cardHeight * 0.45);
+      const cellSize = Math.min(42, availableWidth / cols, availableHeight / rows);
+      const boardWidth = cols * cellSize;
+      const boardHeight = rows * cellSize;
+      const startX = centerX - boardWidth / 2;
+      const startY = boardTopY;
+      boardBottom = startY + boardHeight;
+
+      const redrawBoard = () => {
+        boardHolder.removeAll(true);
+        boardSnapshot.forEach((row, rIdx) => {
+          row.forEach((cell, cIdx) => {
+            const pattern = this.getCellPattern(cell);
+            const color = colorForPattern(pattern);
+            const alpha = pattern === 'none' ? 0.18 : 1;
+            const rect = this.add.rectangle(
+              startX + cIdx * cellSize + cellSize / 2,
+              startY + rIdx * cellSize + cellSize / 2,
+              cellSize - 4,
+              cellSize - 4,
+              color,
+              alpha
+            ).setOrigin(0.5).setDepth(1).setStrokeStyle(1, 0x555555, 0.6);
+            boardHolder.add(rect);
+
+            if (showLetters) {
+              const letter = this.getCellLetter(cell);
+              if (letter) {
+                const letterText = this.add.text(rect.x, rect.y, letter, {
+                  fontFamily: FONT,
+                  fontSize: `${Math.max(18, cellSize / 2)}px`,
+                  color: '#f2f2f2'
+                }).setOrigin(0.5).setDepth(2);
+                boardHolder.add(letterText);
+              }
+            }
+          });
+        });
+      };
+
+      redrawBoard();
+
+      const boardActionHeight = 32;
+      const boardActionWidth = Math.min(cardWidth - 200, 190);
+      const boardActionGap = 10;
+      const stackActions = width < 520;
+      const actionsBaseY = boardBottom + 40;
+      const makeBoardButton = (label, offsetX, y, btnWidth, handler) => {
+        const btn = this.add.rectangle(centerX + offsetX, y, btnWidth, boardActionHeight, 0x242424)
+          .setOrigin(0.5)
+          .setDepth(1)
+          .setInteractive({ useHandCursor: true });
+        const text = this.add.text(centerX + offsetX, y, typeof label === 'function' ? label() : label, {
+          fontFamily: FONT,
+          fontSize: '14px',
+          color: LIGHT_TEXT
+        }).setOrigin(0.5).setDepth(1);
+        text.setInteractive({ useHandCursor: true });
+        const invoke = () => handler();
+        btn.on('pointerover', () => btn.setFillStyle(0x353535));
+        btn.on('pointerout', () => btn.setFillStyle(0x242424));
+        btn.on('pointerdown', invoke);
+        text.on('pointerdown', invoke);
+        return {
+          updateLabel: () => {
+            if (typeof label === 'function') text.setText(label());
+          }
+        };
+      };
+
+      if (stackActions) {
+        const toggleBtn = makeBoardButton(
+          () => (showLetters ? 'Show Colors' : 'Show Letters'),
+          0,
+          actionsBaseY,
+          boardActionWidth,
+          () => {
+            showLetters = !showLetters;
+            redrawBoard();
+            toggleBtn.updateLabel();
+          }
+        );
+        const copyY = actionsBaseY + boardActionHeight + boardActionGap;
+        makeBoardButton(
+          'Share',
+          0,
+          copyY,
+          boardActionWidth,
+          () => this.copyBoardColorsToClipboard(boardSnapshot, this.finalScore)
+        );
+        this.summaryToast = this.add.text(centerX, copyY + boardActionHeight + 20, '', {
+          fontFamily: FONT,
+          fontSize: '14px',
+          color: '#d5d5d5'
+        }).setOrigin(0.5).setDepth(1).setAlpha(0);
+      } else {
+        const offset = boardActionWidth / 2 + 20;
+        const toggleBtn = makeBoardButton(
+          () => (showLetters ? 'Show Colors' : 'Show Letters'),
+          -offset,
+          actionsBaseY,
+          boardActionWidth,
+          () => {
+            showLetters = !showLetters;
+            redrawBoard();
+            toggleBtn.updateLabel();
+          }
+        );
+        makeBoardButton(
+          'Share',
+          offset,
+          actionsBaseY,
+          boardActionWidth,
+          () => this.copyBoardColorsToClipboard(boardSnapshot, this.finalScore)
+        );
+        this.summaryToast = this.add.text(centerX, actionsBaseY + boardActionHeight + 16, '', {
+          fontFamily: FONT,
+          fontSize: '14px',
+          color: '#d5d5d5'
+        }).setOrigin(0.5).setDepth(1).setAlpha(0);
+      }
+    } else {
+      this.add.text(centerX, boardTopY, 'No board data available', {
+        fontFamily: FONT,
+        fontSize: '14px',
+        color: '#b5b5b5'
+      }).setOrigin(0.5).setDepth(1);
+      this.summaryToast = this.add.text(centerX, boardTopY + 40, '', {
+        fontFamily: FONT,
+        fontSize: '14px',
+        color: '#d5d5d5'
+      }).setOrigin(0.5).setDepth(1).setAlpha(0);
+    }
+
+    const buttonConfigs = [
+      { label: 'Leaderboard', action: () => this.scene.start('LeaderboardScene', { summaryData: summaryReturnPayload }) },
+      { label: 'New Game', action: () => this.scene.start('MainScene') }
+    ];
+    const buttonHeight = 40;
+    const buttonGap = 12;
+    const btnWidth = Math.max(Math.min(cardWidth - 120, 260), 200);
+    const blockBottom = centerY + cardHeight / 2 - 30;
+    const totalStackHeight = buttonConfigs.length * buttonHeight + (buttonConfigs.length - 1) * buttonGap;
+    const startY = blockBottom - totalStackHeight + buttonHeight / 2;
+
+    const createButton = (label, y, handler) => {
+      this.add.rectangle(centerX, y + 5, btnWidth + 8, buttonHeight + 8, 0x000000, 0.25).setOrigin(0.5);
+      const btn = this.add.rectangle(centerX, y, btnWidth, buttonHeight, 0x272727)
+        .setStrokeStyle(2, 0x4b4b4b)
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+      const text = this.add.text(centerX, y, label, {
+        fontFamily: FONT,
+        fontSize: '16px',
+        color: '#f3f3f3'
+      }).setOrigin(0.5);
+
+      btn.on('pointerover', () => btn.setFillStyle(0x363636));
+      btn.on('pointerout', () => btn.setFillStyle(0x272727));
+      const invoke = () => handler();
+      btn.on('pointerdown', invoke);
+      text.setInteractive({ useHandCursor: true }).on('pointerdown', invoke);
+    };
+
+    buttonConfigs.forEach((cfg, idx) => {
+      const y = startY + idx * (buttonHeight + buttonGap);
+      createButton(cfg.label, y, cfg.action);
+    });
+
+    this.maybePromptForHighScore(total, words, boardSnapshot, skipAutoPrompt);
+  }
+
+  getCellPattern(cell) {
+    if (cell && typeof cell === 'object') return cell.pattern || 'none';
+    return cell || 'none';
+  }
+
+  getCellLetter(cell) {
+    if (cell && typeof cell === 'object') return (cell.letter || '').toUpperCase();
+    return '';
+  }
+
+  async copyBoardColorsToClipboard(boardSnapshot, score) {
+    const shareText = this.buildColorShareString(boardSnapshot, score);
+    if (!shareText) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareText);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = shareText;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      this.showSummaryToast('Pictogram copied with score!');
+    } catch (err) {
+      console.error('Copy failed:', err);
+      this.showSummaryToast('Unable to copy. See console.');
+    }
+  }
+
+  buildColorShareString(boardSnapshot = [], score) {
+    if (!boardSnapshot.length) return '';
+    const map = { row: '🟨', col: '🟦', both: '🟩', none: '⬛' };
+    const pictogram = boardSnapshot
+      .map((row) =>
+        row
+          .map((cell) => map[this.getCellPattern(cell)] || map.none)
+          .join('')
+      )
+      .join('\n');
+    const numericScore = Number(score);
+    if (Number.isFinite(numericScore)) {
+      return `${pictogram}\n\n**Score: ${numericScore}**`;
+    }
+    return pictogram;
+  }
+  showSummaryToast(message) {
+    if (!this.summaryToast || !message) return;
+    this.summaryToast.setText(message);
+    this.summaryToast.setAlpha(1);
+    if (this.summaryToastTween) this.summaryToastTween.remove();
+    this.summaryToastTween = this.tweens.add({
+      targets: this.summaryToast,
+      alpha: 0,
+      delay: 1500,
+      duration: 600,
+      ease: 'Sine.easeOut'
+    });
+  }
+
+  async maybePromptForHighScore(total, words, boardSnapshot, skipAutoPrompt) {
+    if (skipAutoPrompt || this.highScoreCheckInProgress || !supabase?.from) return;
+    this.highScoreCheckInProgress = true;
+    try {
+      const { data: allTime = [] } = await supabase
+        .from('scores')
+        .select('score')
+        .order('score', { ascending: false })
+        .limit(5);
+
+      const { start, end } = this.getWeeklyWindow();
+      const { data: weekly = [] } = await supabase
+        .from('scores')
+        .select('score')
+        .gte('created_at', start.toISOString())
+        .lt('created_at', end.toISOString())
+        .order('score', { ascending: false })
+        .limit(5);
+
+      const qualifiesAllTime = this.didScoreQualify(total, allTime);
+      const qualifiesWeekly = this.didScoreQualify(total, weekly);
+      if (qualifiesAllTime || qualifiesWeekly) {
+        this.time.delayedCall(600, () => {
+          this.scene.start('NameEntryScene', { words, total, boardSnapshot });
+        });
+      }
+    } catch (error) {
+      console.error('High score check failed:', error);
+    } finally {
+      this.highScoreCheckInProgress = false;
+    }
+  }
+
+  didScoreQualify(total, list = []) {
+    if (!Array.isArray(list)) return false;
+    if (list.length < 5) return total > 0;
+    const threshold = list[list.length - 1]?.score ?? -Infinity;
+    return total >= threshold;
+  }
+
+  getWeeklyWindow() {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+    const end = new Date(monday);
+    end.setDate(end.getDate() + 7);
+    return { start: monday, end };
+  }
+}
+
+// ===================== Leaderboard Scene =====================
+class LeaderboardScene extends Phaser.Scene {
+  constructor() { super('LeaderboardScene'); }
+
+  async create(data = {}) {
+    const { width, height } = this.sys.game.scale.gameSize;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const summaryData = (data && data.summaryData)
+      ? data.summaryData
+      : (typeof window !== 'undefined' ? window.__lastSummaryData : null);
+
+    const cardWidth  = Math.min(480, width * 0.82);
+    const cardHeight = Math.min(600, height * 0.84);
+
+    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.55);
+    this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0x1a1a1a)
+      .setStrokeStyle(3, 0x555555)
+      .setOrigin(0.5);
+
+    this.add.text(centerX, centerY - cardHeight / 2 + 50, 'Leaderboard', {
+      fontFamily: FONT,
+      fontSize: '28px',
+      color: LIGHT_TEXT
+    }).setOrigin(0.5);
+
+    let allTime = [];
+    if (supabase?.from) {
+      const res = await supabase
+        .from('scores')
+        .select('*')
+        .order('score', { ascending: false })
+        .limit(5);
+      allTime = res.data || [];
+    }
+
+    const startOfWeek = (() => {
+      const now = new Date();
+      const day = now.getDay(); // 0 (Sun) - 6 (Sat)
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+      return monday;
+    })();
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+    let weekly = [];
+    if (supabase?.from) {
+      const res = await supabase
+        .from('scores')
+        .select('*')
+        .gte('created_at', startOfWeek.toISOString())
+        .lt('created_at', endOfWeek.toISOString())
+        .order('score', { ascending: false })
+        .limit(5);
+      weekly = res.data || [];
+    }
+
+    const sectionY1 = centerY - cardHeight / 2 + 100;
+    const sectionY2 = sectionY1 + 190;
+
+    this.add.text(centerX, sectionY1, 'Top 5 All-Time', {
+      fontFamily: FONT,
+      fontSize: '18px',
+      color: '#dcdcdc'
+    }).setOrigin(0.5);
+    this.add.text(centerX, sectionY2, 'Top 5 This Week', {
+      fontFamily: FONT,
+      fontSize: '18px',
+      color: '#dcdcdc'
+    }).setOrigin(0.5);
+
+    const renderList = (list, startY) => {
+      if (!list || !list.length) {
+        this.add.text(centerX, startY + 45, 'No scores yet', {
+          fontFamily: FONT,
+          fontSize: '16px',
+          color: '#aaaaaa'
+        }).setOrigin(0.5);
+        return;
+      }
+
+      let y = startY + 25;
+      list.forEach((s, i) => {
+        const date = s.created_at
+          ? new Date(s.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })
+          : '--';
+        this.add.text(centerX - cardWidth / 2 + 40, y, `${i + 1}. ${s.name || 'Anonymous'}`, { fontSize: '18px', color: LIGHT_TEXT });
+        this.add.text(centerX + cardWidth / 2 - 100, y, `${s.score}`, { fontSize: '18px', color: LIGHT_TEXT }).setOrigin(1, 0);
+        this.add.text(centerX + cardWidth / 2 - 40, y, date, { fontSize: '16px', color: '#bbbbbb' }).setOrigin(1, 0);
+        y += 26;
+      });
+    };
+
+    renderList(allTime, sectionY1);
+    renderList(weekly, sectionY2);
+
+    const buttonBaseY = centerY + cardHeight / 2 - 70;
+    const buttonWidth = 190;
+    const buttonHeight = 46;
+    const buttonGap = 16;
+    const stackedButtons = true;
+
+    const buttonConfigs = [
+      {
+        label: 'Back to Summary',
+        enabled: !!summaryData,
+        action: () => summaryData && this.scene.start('SummaryScene', summaryData)
+      },
+      {
+        label: 'New Game',
+        enabled: true,
+        action: () => this.scene.start('MainScene')
+      }
+    ];
+
+    const createCardButton = (cfg, x, y) => {
+      this.add.rectangle(x, y + 6, buttonWidth + 12, buttonHeight + 8, 0x000000, 0.35)
+        .setOrigin(0.5);
+      const btn = this.add.rectangle(x, y, buttonWidth, buttonHeight, cfg.enabled ? 0x272727 : 0x1a1a1a)
+        .setStrokeStyle(2, cfg.enabled ? 0x515151 : 0x2a2a2a)
+        .setOrigin(0.5);
+      const label = this.add.text(x, y, cfg.label, {
+        fontFamily: FONT,
+        fontSize: '18px',
+        color: cfg.enabled ? '#f5f5f5' : '#7a7a7a'
+      }).setOrigin(0.5);
+
+      if (cfg.enabled) {
+        btn.setInteractive({ useHandCursor: true });
+        label.setInteractive({ useHandCursor: true });
+        const handler = () => cfg.action();
+        btn.on('pointerover', () => btn.setFillStyle(0x353535));
+        btn.on('pointerout', () => btn.setFillStyle(0x272727));
+        btn.on('pointerdown', handler);
+        label.on('pointerdown', handler);
+      }
+    };
+
+    if (stackedButtons) {
+      const totalHeight = buttonConfigs.length * buttonHeight + (buttonConfigs.length - 1) * buttonGap;
+      const startY = buttonBaseY - totalHeight / 2 + buttonHeight / 2;
+      buttonConfigs.forEach((cfg, idx) => {
+        const y = startY + idx * (buttonHeight + buttonGap);
+        createCardButton(cfg, centerX, y);
+      });
+    } else {
+      const spacing = 200;
+      buttonConfigs.forEach((cfg, idx) => {
+        const offset = (idx - (buttonConfigs.length - 1) / 2) * spacing;
+        createCardButton(cfg, centerX + offset, buttonBaseY);
+      });
+    }
+  }
+}
+
+
+// ===================== Name Entry Scene =====================
+class NameEntryScene extends Phaser.Scene {
+  constructor() { super('NameEntryScene'); }
+
+  create(data) {
+    const { total, words, boardSnapshot = [] } = data;
+    const { width, height } = this.sys.game.scale.gameSize;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    const cardWidth = Math.min(500, width * 0.85);
+    const cardHeight = Math.min(300, height * 0.52);
+
+    this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.55);
+    this.add.rectangle(centerX, centerY, cardWidth, cardHeight, 0x1b1b1b)
+      .setStrokeStyle(3, 0x555555)
+      .setOrigin(0.5);
+
+    this.add.text(centerX, centerY - 70, 'New High Score!', {
+      fontFamily: FONT,
+      fontSize: '26px',
+      color: LIGHT_TEXT
+    }).setOrigin(0.5);
+
+    this.add.text(centerX, centerY - 30, `Your Score: ${total}`, {
+      fontFamily: FONT,
+      fontSize: '20px',
+      color: '#e8e8e8'
+    }).setOrigin(0.5);
+
+    const inputWidth = Math.min(280, cardWidth - 100);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Enter your name';
+    input.style.position = 'absolute';
+    input.style.width = `${inputWidth}px`;
+    input.style.padding = '8px';
+    input.style.fontSize = '16px';
+    input.style.border = '2px solid #333';
+    input.style.borderRadius = '8px';
+    input.style.textAlign = 'center';
+    input.style.background = '#1f1f1f';
+    input.style.color = '#f4f4f4';
+    input.style.zIndex = '10';
+    input.style.boxShadow = '0 8px 18px rgba(0,0,0,0.5)';
+    document.body.appendChild(input);
+
+    const inputAnchorY = centerY - cardHeight / 2 + 150;
+    const repositionInput = () => {
+      if (!input.parentNode) return;
+      const bounds = this.sys.canvas.getBoundingClientRect();
+      const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+      const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      const left = bounds.left + scrollX + centerX - input.offsetWidth / 2;
+      const top = bounds.top + scrollY + inputAnchorY - input.offsetHeight / 2;
+      input.style.left = `${left}px`;
+      input.style.top = `${top}px`;
+    };
+    setTimeout(repositionInput, 0);
+    window.addEventListener('resize', repositionInput);
+    window.addEventListener('scroll', repositionInput, true);
+    const cleanupInput = () => {
+      window.removeEventListener('resize', repositionInput);
+      window.removeEventListener('scroll', repositionInput, true);
+      if (input.parentNode) {
+        input.parentNode.removeChild(input);
+      }
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupInput);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanupInput);
+
+    const btnY = centerY + 60;
+    const btn = this.add.rectangle(centerX, btnY, 140, 40, 0x2a2a2a)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    this.add.text(centerX, btnY, 'Submit', {
+      fontFamily: FONT,
+      fontSize: '18px',
+      color: LIGHT_TEXT
+    }).setOrigin(0.5);
+
+    btn.on('pointerover', () => btn.setFillStyle(0x444444));
+    btn.on('pointerout',  () => btn.setFillStyle(0x2a2a2a));
+
+    btn.on('pointerdown', async () => {
+      const playerName = input.value.trim() || 'Anonymous';
+      cleanupInput();
+
+      try {
+        if (!supabase?.from) throw new Error('Leaderboard unavailable');
+        const { data, error } = await supabase
+          .from('scores')
+          .insert([{ name: playerName, score: total }])
+          .select();
+        if (error) throw error;
+        console.log('Score inserted:', data);
+      } catch (error) {
+        console.error('Supabase insert error:', error);
+        alert('Unable to save score - check console for details.');
+      }
+
+      this.scene.start('SummaryScene', { words, total, boardSnapshot, skipAutoPrompt: true });
+    });
+  }
+}
+// ===================== Launch / Reset / Boot =====================
+
+// --- NOTE: All global state functions are GONE. ---
+// --- The MainScene's create() method handles all resets. ---
+
+function launchGame() {
+  const game = new Phaser.Game({
+    ...gameConfig,
+    scene: [MainScene, NameEntryScene, SummaryScene, LeaderboardScene]
+  });
+
+  setTimeout(() => {
+    game.scale.resize(window.innerWidth, window.innerHeight);
+  }, 250);
+
+  window.addEventListener("resize", () => {
+    if (game && game.scale) {
+      game.scale.resize(window.innerWidth, window.innerHeight);
+    }
+  });
+}
+
+// Wait for the Fredoka web font to load before launching, otherwise Phaser
+// renders text in the fallback font and won't refresh once Fredoka arrives.
+function boot() {
+  let launched = false;
+  const start = () => {
+    if (launched) return;
+    launched = true;
+    launchGame();
+  };
+  // Don't let a slow/blocked font request stall the game — launch anyway after 1.5s.
+  setTimeout(start, 1500);
+  if (document.fonts && document.fonts.load) {
+    Promise.all([
+      document.fonts.load("700 32px 'Fredoka'"),
+      document.fonts.load("500 16px 'Fredoka'")
+    ])
+      .then(() => document.fonts.ready)
+      .then(start)
+      .catch(start);
+  } else {
+    start();
+  }
+}
+
+if (document.readyState === "complete") {
+  boot();
+} else {
+  window.addEventListener("load", boot);
+}
+
+
+
+
+
+
+
